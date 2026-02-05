@@ -1,9 +1,16 @@
 # Oscimorph
 
 Oscimorph is a full-screen desktop app for turning media, shapes, text, or scripts into oscilloscope-style, audio-reactive MP4 videos.
+Oscimorph treats sound as signal and visuals as geometry — not presets.
 
 Developed by David Cody - Honeycomb Lab  
 Honeycomb Lab: https://www.honeycomblab.art
+
+**How It Works**
+1. Choose an input mode: Media, Shapes, Text, or Script.
+1. Choose an audio source: Audio File or Oscillator.
+1. Adjust render settings, overlays, and effects.
+1. Render to an MP4.
 
 **Features**
 - Input modes: media (GIF, image, or video), shapes, text, or Python script geometry
@@ -36,12 +43,6 @@ python -m oscimorph
 
 If you install the package in editable mode, you can also run `oscimorph` directly.
 
-**How It Works**
-1. Choose an input mode: Media, Shapes, Text, or Script.
-1. Choose an audio source: Audio File or Oscillator.
-1. Adjust render settings, overlays, and effects.
-1. Render to an MP4.
-
 **Input Modes**
 - **Media**: Uses a GIF/image/video as the base frame source.
 - **Shapes**: Generates procedural outlines (see shapes list above).
@@ -68,6 +69,8 @@ def generate(t, audio, settings):
 `audio` keys: `subs`, `lows`, `low_mids`, `high_mids`, `highs`, `all`, `osc`  
 `settings` keys: `width`, `height`, `fps`
 
+This allows fully procedural, generative, and fractal visuals driven directly by sound.
+
 Example scripts live in `scripts/` (e.g., `lissajous.py`, `spirograph.py`, `julia_set.py`).
 
 **Presets**
@@ -90,6 +93,13 @@ Example scripts live in `scripts/` (e.g., `lissajous.py`, `spirograph.py`, `juli
 - `scripts/`: example procedural geometry scripts
 - `assets/`: icons and branding
 - `output/`, `debug/`, `temp/`: runtime directories
+
+**Who Oscimorph Is For**
+- Music producers who want custom visuals for their tracks
+- Artists making lyric videos or logo reveals
+- Developers and math/graphics nerds who enjoy procedural geometry
+
+Not intended as a VJ performance tool or real-time live visuals (yet).
 
 **License**
 MIT License. See `legal/LICENSE.txt`.
