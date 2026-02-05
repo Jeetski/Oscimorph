@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+/debug/
+*.log
+
+# OS
+Desktop.ini
+
+# Outputs
+/output/
+/temp/
