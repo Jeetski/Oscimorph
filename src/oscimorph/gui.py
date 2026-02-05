@@ -7,7 +7,7 @@ from typing import Callable
 import cv2
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal, QSize, QIODevice, QThread, QPointF, QRect
-from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap, QPolygonF, QPen
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QImage, QPainter, QPixmap, QPolygonF, QPen
 from PySide6.QtMultimedia import QAudioFormat, QAudioSink, QMediaPlayer, QAudioOutput
 from PySide6.QtWidgets import (
     QApplication,
@@ -1214,9 +1214,16 @@ class MainWindow(QMainWindow):
         form.addRow("Scale", self.text_scale)
 
         self.text_font_family = QFont().defaultFamily()
+        self.text_font_combo = QComboBox()
+        families = QFontDatabase.families()
+        self.text_font_combo.addItems(families)
+        if self.text_font_family in families:
+            self.text_font_combo.setCurrentText(self.text_font_family)
+        form.addRow("Font", self.text_font_combo)
 
         self.text_input.textChanged.connect(self._update_preview_frame)
         self.text_scale.valueChanged.connect(self._update_preview_frame)
+        self.text_font_combo.currentTextChanged.connect(self._on_text_font_changed)
 
         self.side_layout.addWidget(self.text_frame)
 
@@ -2031,6 +2038,11 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Select script", root, "Python Files (*.py)")
         if path:
             self.script_path.setText(path)
+
+    def _on_text_font_changed(self, family: str) -> None:
+        if family:
+            self.text_font_family = family
+            self._update_preview_frame()
 
     def _pick_color(self) -> None:
         color = QColorDialog.getColor(QColor(*self._color_rgb()), self)
