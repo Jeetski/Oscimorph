@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "active_effects": [
+    "scanline",
+    "trail",
+    "hue",
+    "glow",
+    "smoothing"
+  ],
+  "controls": {
+    "scanline_amount": {
+      "amount": 0.9,
+      "band": "band:3",
+      "speed": 2.2
+    },
+    "trail_strength": {
+      "amount": 0.35
+    },
+    "hue_shift_amount": {
+      "amount": 55.0,
+      "band": "band:2"
+    },
+    "mod_glow_amount": {
+      "amount": 1.4,
+      "band": "all"
+    },
+    "glow_radius": {
+      "amount": 3.4
+    }
+  },
+  "smoothing_amount": 0.18,
+  "glow_enabled": true
+}

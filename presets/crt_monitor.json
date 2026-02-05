@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "active_effects": [
+    "scanline",
+    "phosphor",
+    "bloom",
+    "vignette",
+    "chromatic",
+    "noise",
+    "bleed",
+    "dither",
+    "h_jitter"
+  ],
+  "controls": {
+    "scanline_amount": {
+      "amount": 0.8,
+      "band": "all",
+      "speed": 1.6
+    },
+    "phosphor_amount": {
+      "amount": 0.45
+    },
+    "bloom_amount": {
+      "amount": 0.35
+    },
+    "bloom_radius": {
+      "amount": 3.0
+    },
+    "bloom_threshold": {
+      "amount": 0.6
+    },
+    "vignette_amount": {
+      "amount": 0.35
+    },
+    "vignette_power": {
+      "amount": 1.8
+    },
+    "chroma_shift_x": {
+      "amount": 1.2
+    },
+    "chroma_shift_y": {
+      "amount": 0.6
+    },
+    "noise_amount": {
+      "amount": 0.12
+    },
+    "bleed_amount": {
+      "amount": 0.3
+    },
+    "dither_amount": {
+      "amount": 0.25
+    },
+    "h_jitter_amount": {
+      "amount": 1.5
+    },
+    "h_jitter_speed": {
+      "amount": 2.0
+    }
+  },
+  "smoothing_amount": 0.0,
+  "glow_enabled": false
+}

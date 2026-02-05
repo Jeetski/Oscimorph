@@ -1,0 +1,9 @@
+numpy
+opencv-python
+pillow
+librosa
+soundfile
+moviepy
+imageio
+imageio-ffmpeg
+PySide6

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "active_effects": [
+    "smoothing",
+    "rotation",
+    "hue",
+    "glow"
+  ],
+  "controls": {
+    "mod_rotation_amount": {
+      "amount": 120.0,
+      "band": "all",
+      "direction": "alternate"
+    },
+    "hue_shift_amount": {
+      "amount": 90.0,
+      "band": "band:2"
+    },
+    "mod_glow_amount": {
+      "amount": 1.2,
+      "band": "all"
+    },
+    "glow_radius": {
+      "amount": 3.0
+    }
+  },
+  "smoothing_amount": 0.2,
+  "glow_enabled": true
+}

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "active_effects": [
+    "threshold",
+    "decimate",
+    "thickness",
+    "jitter"
+  ],
+  "controls": {
+    "mod_threshold_amount": {
+      "amount": 0.2,
+      "band": "all"
+    },
+    "decimate_step": {
+      "step": 5
+    },
+    "mod_thickness_amount": {
+      "amount": 5.0,
+      "band": "band:1"
+    },
+    "jitter_amount": {
+      "amount": 0.6,
+      "band": "all"
+    }
+  },
+  "smoothing_amount": 0.0,
+  "glow_enabled": false
+}

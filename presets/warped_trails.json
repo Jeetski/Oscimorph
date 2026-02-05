@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "active_effects": [
+    "smoothing",
+    "warp",
+    "displace",
+    "trail",
+    "jitter",
+    "glow"
+  ],
+  "controls": {
+    "mod_warp_amount": {
+      "amount": 12.0,
+      "band": "band:4"
+    },
+    "mod_warp_speed_amount": {
+      "amount": 3.0,
+      "band": "band:2"
+    },
+    "mod_displace_x_amount": {
+      "amount": 8.0,
+      "band": "band:1"
+    },
+    "mod_displace_y_amount": {
+      "amount": 8.0,
+      "band": "band:2"
+    },
+    "trail_strength": {
+      "amount": 0.25
+    },
+    "jitter_amount": {
+      "amount": 0.8,
+      "band": "all"
+    },
+    "mod_glow_amount": {
+      "amount": 1.0,
+      "band": "all"
+    },
+    "glow_radius": {
+      "amount": 2.5
+    }
+  },
+  "smoothing_amount": 0.15,
+  "glow_enabled": true
+}

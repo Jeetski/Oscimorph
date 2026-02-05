@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "active_effects": [
+    "displace",
+    "warp",
+    "jitter",
+    "flicker"
+  ],
+  "controls": {
+    "mod_displace_x_amount": {
+      "amount": 12.0,
+      "band": "band:1"
+    },
+    "mod_displace_y_amount": {
+      "amount": 12.0,
+      "band": "band:3"
+    },
+    "mod_warp_amount": {
+      "amount": 16.0,
+      "band": "band:4"
+    },
+    "mod_warp_speed_amount": {
+      "amount": 4.0,
+      "band": "band:2"
+    },
+    "jitter_amount": {
+      "amount": 1.6,
+      "band": "all"
+    },
+    "flicker_amount": {
+      "amount": 0.25,
+      "band": "band:4"
+    }
+  },
+  "smoothing_amount": 0.0,
+  "glow_enabled": false
+}

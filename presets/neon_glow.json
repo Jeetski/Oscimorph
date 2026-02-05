@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "active_effects": [
+    "smoothing",
+    "glow",
+    "thickness",
+    "hue",
+    "flicker"
+  ],
+  "controls": {
+    "mod_thickness_amount": {
+      "amount": 4.0,
+      "band": "all"
+    },
+    "mod_glow_amount": {
+      "amount": 2.0,
+      "band": "all"
+    },
+    "glow_radius": {
+      "amount": 4.0
+    },
+    "hue_shift_amount": {
+      "amount": 40.0,
+      "band": "band:3"
+    },
+    "flicker_amount": {
+      "amount": 0.15,
+      "band": "band:4"
+    }
+  },
+  "smoothing_amount": 0.2,
+  "glow_enabled": true
+}

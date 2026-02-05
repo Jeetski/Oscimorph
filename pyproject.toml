@@ -1,0 +1,26 @@
+[project]
+name = "oscimorph"
+version = "0.1.0"
+description = "GIF + audio oscilloscope renderer"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+  "numpy",
+  "opencv-python",
+  "pillow",
+  "librosa",
+  "soundfile",
+  "moviepy",
+  "imageio",
+  "imageio-ffmpeg",
+  "PySide6",
+]
+
+[project.scripts]
+oscimorph = "oscimorph.app:main"
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "active_effects": [
+    "smoothing",
+    "thickness",
+    "glow"
+  ],
+  "controls": {
+    "mod_thickness_amount": {
+      "amount": 1.8,
+      "band": "all"
+    },
+    "mod_glow_amount": {
+      "amount": 0.6,
+      "band": "all"
+    },
+    "glow_radius": {
+      "amount": 1.6
+    }
+  },
+  "smoothing_amount": 0.3,
+  "glow_enabled": true
+}

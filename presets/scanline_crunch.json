@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "active_effects": [
+    "scanline",
+    "decimate",
+    "threshold",
+    "thickness",
+    "smoothing"
+  ],
+  "controls": {
+    "scanline_amount": {
+      "amount": 1.0,
+      "band": "all",
+      "speed": 1.5
+    },
+    "decimate_step": {
+      "step": 3
+    },
+    "mod_threshold_amount": {
+      "amount": 0.12,
+      "band": "all"
+    },
+    "mod_thickness_amount": {
+      "amount": 2.5,
+      "band": "band:2"
+    }
+  },
+  "smoothing_amount": 0.25,
+  "glow_enabled": false
+}
