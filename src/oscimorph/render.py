@@ -12,6 +12,7 @@ import numpy as np
 from PIL import Image
 from moviepy import AudioFileClip, ImageSequenceClip
 from proglog import ProgressBarLogger
+from PySide6.QtGui import QFont, QPainterPath
 
 from .audio import band_at_frame, frame_count, load_and_analyze
 
@@ -105,6 +106,9 @@ class RenderSettings:
     osc_frequency: float = 0.5
     osc_depth: float = 1.0
     osc_mix: float = 0.0
+    text_value: str = "OSCIMORPH"
+    text_scale: float = 1.0
+    text_font_family: str = ""
     dither_amount: float = 0.2
     phosphor_amount: float = 0.35
     bloom_amount: float = 0.35
@@ -423,6 +427,51 @@ def _load_script(path: str):
     if not callable(generate):
         raise RuntimeError("Script must define a callable generate(t, audio, settings)")
     return generate
+
+
+def _text_to_polylines(text: str, *, font_family: str, scale: float) -> list[list[tuple[float, float]]]:
+    if not text.strip():
+        raise RuntimeError("Text is empty")
+    font = QFont(font_family)
+    if not font_family:
+        font = QFont()
+    font.setStyleStrategy(QFont.PreferAntialias)
+    font.setPointSizeF(100.0)
+    path = QPainterPath()
+    path.addText(0, 0, font, text)
+    polygons = path.toSubpathPolygons()
+    if not polygons:
+        raise RuntimeError("Unable to extract text outlines")
+
+    points: list[tuple[float, float]] = []
+    polylines: list[list[tuple[float, float]]] = []
+    for poly in polygons:
+        line = [(pt.x(), pt.y()) for pt in poly]
+        if line:
+            polylines.append(line)
+            points.extend(line)
+    if not points:
+        raise RuntimeError("Unable to extract text outlines")
+
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    width = max_x - min_x
+    height = max_y - min_y
+    if width <= 0 or height <= 0:
+        raise RuntimeError("Text outlines have zero area")
+    center_x = (min_x + max_x) / 2.0
+    center_y = (min_y + max_y) / 2.0
+    normalize = 2.0 / max(width, height)
+    scale = float(max(0.05, min(5.0, scale)))
+
+    normalized: list[list[tuple[float, float]]] = []
+    for line in polylines:
+        normalized.append(
+            [((x - center_x) * normalize * scale, (y - center_y) * normalize * scale) for x, y in line]
+        )
+    return normalized
 
 
 def _script_audio_payload(bands: np.ndarray, osc: float) -> dict[str, float]:
@@ -858,11 +907,19 @@ def render_video(
     _ensure_temp_dir(settings.output_path)
     gif_frames: List[np.ndarray] | None
     script_generate = None
+    text_polylines: list[list[tuple[float, float]]] | None = None
     if settings.media_mode == "shapes":
         gif_frames = None
     elif settings.media_mode == "script":
         gif_frames = None
         script_generate = _load_script(settings.script_path)
+    elif settings.media_mode == "text":
+        gif_frames = None
+        text_polylines = _text_to_polylines(
+            settings.text_value,
+            font_family=settings.text_font_family,
+            scale=settings.text_scale,
+        )
     else:
         gif_frames = _load_media_frames(
             settings.media_path,
@@ -977,6 +1034,13 @@ def render_video(
                 settings.width,
                 settings.height,
                 polylines,
+                preserve_aspect=settings.preserve_aspect,
+            )
+        elif text_polylines is not None:
+            base = _make_script_frame(
+                settings.width,
+                settings.height,
+                text_polylines,
                 preserve_aspect=settings.preserve_aspect,
             )
         elif gif_frames is None:

@@ -7,7 +7,7 @@ from typing import Callable
 import cv2
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal, QSize, QIODevice, QThread, QPointF, QRect
-from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap, QPolygonF, QPen
+from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap, QPolygonF, QPen
 from PySide6.QtMultimedia import QAudioFormat, QAudioSink, QMediaPlayer, QAudioOutput
 from PySide6.QtWidgets import (
     QApplication,
@@ -47,6 +47,7 @@ from .render import (
     _oscillator_value,
     _script_audio_payload,
     _rotation_direction,
+    _text_to_polylines,
     _apply_bloom,
     _apply_vignette,
     _apply_phosphor_mask,
@@ -975,6 +976,7 @@ class MainWindow(QMainWindow):
 
         self._build_io_frame()
         self._build_shape_frame()
+        self._build_text_frame()
         self._build_script_frame()
         self._build_effects_frame()
         self._build_osc_frame()
@@ -995,6 +997,7 @@ class MainWindow(QMainWindow):
         self.media_mode_combo = QComboBox()
         self.media_mode_combo.addItem("Media", "media")
         self.media_mode_combo.addItem("Shapes", "shapes")
+        self.media_mode_combo.addItem("Text", "text")
         self.media_mode_combo.addItem("Script", "script")
         form.addRow("Input Mode", self.media_mode_combo)
 
@@ -1179,6 +1182,27 @@ class MainWindow(QMainWindow):
         script_row.addWidget(self.script_browse)
         form.addRow("Script Path", self._wrap_row(script_row))
         self.side_layout.addWidget(self.script_frame)
+
+    def _build_text_frame(self) -> None:
+        self.text_frame = QGroupBox("Text")
+        content = self._collapsible_content(self.text_frame)
+        form = QFormLayout(content)
+
+        self.text_input = QLineEdit("OSCIMORPH")
+        form.addRow("Text", self.text_input)
+
+        self.text_scale = QDoubleSpinBox()
+        self.text_scale.setRange(0.2, 4.0)
+        self.text_scale.setSingleStep(0.05)
+        self.text_scale.setValue(1.0)
+        form.addRow("Scale", self.text_scale)
+
+        self.text_font_family = QFont().defaultFamily()
+
+        self.text_input.textChanged.connect(self._update_preview_frame)
+        self.text_scale.valueChanged.connect(self._update_preview_frame)
+
+        self.side_layout.addWidget(self.text_frame)
 
     def _build_effects_frame(self) -> None:
         self.effects_frame = QGroupBox("Effects")
@@ -1938,10 +1962,12 @@ class MainWindow(QMainWindow):
         is_media = media_mode == "media"
         is_shapes = media_mode == "shapes"
         is_script = media_mode == "script"
+        is_text = media_mode == "text"
         self.media_path.setEnabled(is_media)
         self.media_browse.setEnabled(is_media)
         self.shape_frame.setVisible(is_shapes)
         self.script_frame.setVisible(is_script)
+        self.text_frame.setVisible(is_text)
 
         is_audio_file = audio_mode == "file"
         self.audio_path.setEnabled(is_audio_file)
@@ -2243,7 +2269,19 @@ class MainWindow(QMainWindow):
         shifted_color = _apply_hue_shift(settings.color_rgb, hue_shift)
         color = QColor(*shifted_color)
 
-        if settings.media_mode == "script" and self.script_generate:
+        if settings.media_mode == "text":
+            try:
+                polylines = _text_to_polylines(
+                    self.text_input.text(),
+                    font_family=self.text_font_family,
+                    scale=float(self.text_scale.value()),
+                )
+            except RuntimeError as exc:
+                polylines = None
+                if getattr(self, "_text_error", None) != str(exc):
+                    self._text_error = str(exc)
+                    QMessageBox.warning(self, "Text Error", str(exc))
+        elif settings.media_mode == "script" and self.script_generate:
             payload = _script_audio_payload(bands, osc)
             polylines = self.script_generate(
                 self.preview_time,
@@ -2412,6 +2450,9 @@ class MainWindow(QMainWindow):
             osc_frequency=float(self.osc_frequency.value()),
             osc_depth=float(self.osc_depth.value()),
             osc_mix=float(self.osc_mix.value()),
+            text_value=self.text_input.text(),
+            text_scale=float(self.text_scale.value()),
+            text_font_family=self.text_font_family,
             dither_amount=self._effect_amount("dither_amount", "dither"),
             phosphor_amount=self._effect_amount("phosphor_amount", "phosphor"),
             bloom_amount=self._effect_amount("bloom_amount", "bloom"),
