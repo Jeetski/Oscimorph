@@ -1217,6 +1217,11 @@ class MainWindow(QMainWindow):
         self.text_font_combo = QComboBox()
         families = QFontDatabase.families()
         self.text_font_combo.addItems(families)
+        self.text_font_combo.setEditable(True)
+        self.text_font_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.text_font_combo.setCompleter(self.text_font_combo.completer())
+        self.text_font_combo.completer().setCaseSensitivity(Qt.CaseInsensitive)
+        self.text_font_combo.completer().setFilterMode(Qt.MatchContains)
         if self.text_font_family in families:
             self.text_font_combo.setCurrentText(self.text_font_family)
         form.addRow("Font", self.text_font_combo)
