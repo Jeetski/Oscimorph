@@ -1,52 +1,59 @@
 # Oscimorph
 
-Oscimorph turns media, shapes, or scripts into oscilloscope-style, audio-reactive MP4 videos.
+Oscimorph is a full-screen desktop app for turning media, shapes, text, or scripts into oscilloscope-style, audio-reactive MP4 videos.
 
-Developed by David Cody - Honeycomb Lab
+Developed by David Cody - Honeycomb Lab  
 Honeycomb Lab: https://www.honeycomblab.art
 
-## Requirements
+**Features**
+- Input modes: media (GIF, image, or video), shapes, text, or Python script geometry
+- Audio source: audio file analysis or internal oscillator (with optional audio monitor)
+- Render modes: edge-only or edge-overlay with waveform line and lissajous overlay
+- Built-in shapes: ring, polygon, ellipse, heart, star, rectangle, spiral, lemniscate, cardioid, clover, superellipse
+- Audio modulation targets: `all`, `low`, `mid`, `high`, `band:<index>`, or `osc`
+- Effect stack: smoothing, displacement, thickness, glow, threshold, warp, rotation, trail, flicker, hue shift, scanline, decimate, jitter, dither, phosphor, bloom, vignette, chromatic aberration, barrel distortion, noise, horizontal jitter, vertical roll, color bleed
+- Preset save/load (JSON) with built-in presets in `presets/`
+- MP4 output via MoviePy/FFmpeg with resolution, FPS, and aspect controls
+
+**Requirements**
 - Python 3.11+
 - `ffmpeg` on PATH (for reliable MP4 output)
 
-## Install
+**Quick Start (Windows)**
+1. Double-click `run_oscimorph.bat`.
+1. The script installs dependencies, launches the app, and logs to `debug/oscimorph_run.log`.
+
+**Quick Start (macOS/Linux)**
+1. `bash run_oscimorph.sh`
+1. The script installs dependencies, launches the app, and logs to `debug/oscimorph_run.log`.
+
+**Manual Run**
 ```powershell
 python -m pip install -r requirements.txt
-```
-
-## Run
-```powershell
+set PYTHONPATH=src
 python -m oscimorph
 ```
-Or use `run_oscimorph.bat` (auto-installs deps and logs to `debug/`).
 
-## Inputs
-Choose one of these:
-1. Media: GIF, image, or video
-2. Shapes: Ring or Polygon (outline only)
-3. Script: Procedural geometry from a `.py` file
+If you install the package in editable mode, you can also run `oscimorph` directly.
 
-Audio input is required for all modes.
+**How It Works**
+1. Choose an input mode: Media, Shapes, Text, or Script.
+1. Choose an audio source: Audio File or Oscillator.
+1. Adjust render settings, overlays, and effects.
+1. Render to an MP4.
 
-## Preview
-The preview is lightweight and shows modulation behavior, not final pixels.
-- Media mode: ring proxy
-- Shapes mode: selected shape
-- Script mode: your script geometry
+**Input Modes**
+- **Media**: Uses a GIF/image/video as the base frame source.
+- **Shapes**: Generates procedural outlines (see shapes list above).
+- **Text**: Converts a font outline into polylines.
+- **Script**: Runs a local Python file that returns polylines per frame.
 
-Transport controls include play/pause, stop, loop, in/out, and mute.
+**Audio Analysis**
+Oscimorph analyzes the audio into 5 bands and exposes these to modulators and scripts:
+- `subs`, `lows`, `low_mids`, `high_mids`, `highs`, plus `all` (average)
+- `osc` is available when mixing the internal oscillator
 
-## Shapes
-- Ring: audio-modulated ring
-- Polygon: set sides and orientation
-- Orientation modulation is available in Effects
-
-## Effects
-- Modulate displacement, thickness, glow, threshold, warp, warp speed, and rotation
-- Modulators can target: `subs`, `lows`, `low_mids`, `high_mids`, `highs`, `all`
-- Smoothing optionally dampens band motion
-
-## Script input (procedural geometry)
+**Script API**
 Provide a `.py` file with a `generate` function:
 
 ```python
@@ -58,20 +65,31 @@ def generate(t, audio, settings):
     ]
 ```
 
-`audio` keys:
-`subs`, `lows`, `low_mids`, `high_mids`, `highs`, `all`.
+`audio` keys: `subs`, `lows`, `low_mids`, `high_mids`, `highs`, `all`, `osc`  
+`settings` keys: `width`, `height`, `fps`
 
-`settings` keys:
-`width`, `height`, `fps`.
+Example scripts live in `scripts/` (e.g., `lissajous.py`, `spirograph.py`, `julia_set.py`).
 
-Scripts run as local user code (no sandbox). Keep them fast.
+**Presets**
+- Use the **Effects** panel to save and load JSON presets.
+- Built-in presets are stored in `presets/`.
 
-## Output and folders
+**Output & Logs**
 - Default output: `output/output.mp4`
-- Scripts live in `scripts/`
-- Logs: `debug/oscimorph_run.log`
-- Temp files: `temp/`
+- Render log: `debug/oscimorph_run.log`
+- Temporary files: `temp/`
 
-## Tips
-- If you see a crash on launch, check `debug/oscimorph_run.log`.
-- If output is slow, try lowering resolution or FPS.
+**Controls & Tips**
+- Press `Esc` to exit (with confirmation).
+- Preview is lightweight and intended to show modulation behavior, not final pixel quality.
+- If rendering is slow, reduce resolution or FPS.
+
+**Project Layout**
+- `src/oscimorph/`: application code (GUI, audio analysis, renderer)
+- `presets/`: effect presets
+- `scripts/`: example procedural geometry scripts
+- `assets/`: icons and branding
+- `output/`, `debug/`, `temp/`: runtime directories
+
+**License**
+MIT License. See `legal/LICENSE.txt`.
