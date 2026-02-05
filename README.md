@@ -1,7 +1,7 @@
 # Oscimorph
 
 Oscimorph is a full-screen desktop app for turning media, shapes, text, or scripts into oscilloscope-style, audio-reactive MP4 videos.
-Oscimorph treats sound as signal and visuals as geometry — not presets.
+Oscimorph treats sound as signal and visuals as geometry.
 
 Developed by David Cody - Honeycomb Lab  
 Honeycomb Lab: https://www.honeycomblab.art
