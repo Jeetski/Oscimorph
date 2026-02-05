@@ -265,6 +265,11 @@ class PreviewCanvas(QWidget):
             scale = min(width, height) * 0.45
             offset_x = width * 0.5 + self._displace[0]
             offset_y = height * 0.5 + self._displace[1]
+        rotation = float(self._shape_params.get("poly_rotation", 0.0))
+        if rotation:
+            rot = np.deg2rad(rotation)
+            cos_r = np.cos(rot)
+            sin_r = np.sin(rot)
         color = QColor(self._color)
         boost = 1.0
         color.setRed(min(255, int(color.red() * boost)))
@@ -284,6 +289,10 @@ class PreviewCanvas(QWidget):
                 if self._jitter_amount > 0.0:
                     x += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
                     y += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                if rotation:
+                    xr = x * cos_r - y * sin_r
+                    yr = x * sin_r + y * cos_r
+                    x, y = xr, yr
                 if self._preserve_aspect:
                     px = offset_x + x * scale
                     py = offset_y + y * scale
@@ -2326,6 +2335,7 @@ class MainWindow(QMainWindow):
             "jitter_amount": settings.jitter_amount * sig_jitter,
             "threshold": threshold_value,
             "time": self.preview_time,
+            "poly_rotation": base_rotation,
             "dither_amount": settings.dither_amount,
             "phosphor_amount": settings.phosphor_amount,
             "bloom_amount": settings.bloom_amount,

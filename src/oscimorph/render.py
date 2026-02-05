@@ -474,6 +474,18 @@ def _text_to_polylines(text: str, *, font_family: str, scale: float) -> list[lis
     return normalized
 
 
+def _rotate_polylines(polylines: list[list[tuple[float, float]]], degrees: float) -> list[list[tuple[float, float]]]:
+    if abs(degrees) < 1e-3:
+        return polylines
+    rot = np.deg2rad(degrees)
+    cos_r = np.cos(rot)
+    sin_r = np.sin(rot)
+    rotated: list[list[tuple[float, float]]] = []
+    for line in polylines:
+        rotated.append([(x * cos_r - y * sin_r, x * sin_r + y * cos_r) for x, y in line])
+    return rotated
+
+
 def _script_audio_payload(bands: np.ndarray, osc: float) -> dict[str, float]:
     if bands.size < 5:
         return {
@@ -1037,10 +1049,14 @@ def render_video(
                 preserve_aspect=settings.preserve_aspect,
             )
         elif text_polylines is not None:
+            text_rotation = 0.0
+            if settings.mod_rotation_amount != 0.0:
+                text_rotation = settings.mod_rotation_amount * sig_rotation
+            polylines = _rotate_polylines(text_polylines, text_rotation)
             base = _make_script_frame(
                 settings.width,
                 settings.height,
-                text_polylines,
+                polylines,
                 preserve_aspect=settings.preserve_aspect,
             )
         elif gif_frames is None:
