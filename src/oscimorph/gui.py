@@ -270,6 +270,7 @@ class PreviewCanvas(QWidget):
             rot = np.deg2rad(rotation)
             cos_r = np.cos(rot)
             sin_r = np.sin(rot)
+        warp = max(0.0, self._warp_amount) * 0.003
         color = QColor(self._color)
         boost = 1.0
         color.setRed(min(255, int(color.red() * boost)))
@@ -289,6 +290,12 @@ class PreviewCanvas(QWidget):
                 if self._jitter_amount > 0.0:
                     x += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
                     y += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                if warp > 0.0:
+                    angle = np.arctan2(y, x)
+                    radius = np.sqrt(x * x + y * y)
+                    radius *= 1.0 + warp * np.sin(angle * 3.0 + self._warp_phase)
+                    x = np.cos(angle) * radius
+                    y = np.sin(angle) * radius
                 if rotation:
                     xr = x * cos_r - y * sin_r
                     yr = x * sin_r + y * cos_r

@@ -486,6 +486,22 @@ def _rotate_polylines(polylines: list[list[tuple[float, float]]], degrees: float
     return rotated
 
 
+def _warp_polylines(polylines: list[list[tuple[float, float]]], amount: float, phase: float) -> list[list[tuple[float, float]]]:
+    warp = max(0.0, amount) * 0.003
+    if warp <= 0.0:
+        return polylines
+    warped: list[list[tuple[float, float]]] = []
+    for line in polylines:
+        out: list[tuple[float, float]] = []
+        for x, y in line:
+            angle = np.arctan2(y, x)
+            radius = np.sqrt(x * x + y * y)
+            radius *= 1.0 + warp * np.sin(angle * 3.0 + phase)
+            out.append((np.cos(angle) * radius, np.sin(angle) * radius))
+        warped.append(out)
+    return warped
+
+
 def _script_audio_payload(bands: np.ndarray, osc: float) -> dict[str, float]:
     if bands.size < 5:
         return {
@@ -1042,6 +1058,8 @@ def render_video(
             )
             if not isinstance(polylines, list):
                 raise RuntimeError("Script generate() must return a list of polylines")
+            warp_phase = t_sec * (1.0 + settings.mod_warp_speed_amount * sig_warp_speed) * 6.0
+            polylines = _warp_polylines(polylines, settings.mod_warp_amount * sig_warp, warp_phase)
             base = _make_script_frame(
                 settings.width,
                 settings.height,
@@ -1053,6 +1071,8 @@ def render_video(
             if settings.mod_rotation_amount != 0.0:
                 text_rotation = settings.mod_rotation_amount * sig_rotation
             polylines = _rotate_polylines(text_polylines, text_rotation)
+            warp_phase = t_sec * (1.0 + settings.mod_warp_speed_amount * sig_warp_speed) * 6.0
+            polylines = _warp_polylines(polylines, settings.mod_warp_amount * sig_warp, warp_phase)
             base = _make_script_frame(
                 settings.width,
                 settings.height,
