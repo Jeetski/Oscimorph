@@ -17,26 +17,22 @@ if not exist "temp" mkdir "temp"
 
 where python >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-  echo Python not found. Attempting install via winget...
-  where winget >nul 2>&1
-  if %ERRORLEVEL% NEQ 0 (
-    echo winget not available. Please install Python 3.11+ and rerun.
-    pause
-    exit /b 1
-  )
-  winget install -e --id Python.Python.3.11
-  if %ERRORLEVEL% NEQ 0 (
-    echo Python install failed. Please install Python 3.11+ manually.
-    pause
-    exit /b 1
-  )
+  echo Python not found. Run install_dependencies.bat first.
+  pause
+  exit /b 1
 )
 
-python -m pip install --upgrade pip >nul 2>&1
-python -m pip install -r "%APP_DIR%\requirements.txt"
+python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+  echo Python 3.11+ is required. Run install_dependencies.bat first.
+  pause
+  exit /b 1
+)
+
+python -c "import importlib.util,sys;mods=['numpy','cv2','PIL','librosa','soundfile','moviepy','imageio','imageio_ffmpeg','PySide6'];missing=[m for m in mods if importlib.util.find_spec(m) is None];raise SystemExit(0 if not missing else 1)" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
   echo.
-  echo Failed to install requirements.
+  echo Missing required Python packages. Run install_dependencies.bat first.
   pause
   exit /b 1
 )

@@ -19,15 +19,19 @@ Oscimorph turns visual outlines into audio-reactive videos:
 
 ### Windows
 
-1. Double-click `run_oscimorph.bat`.
-2. Wait for dependency install (first launch can take time).
-3. App opens full-screen.
+1. Double-click `install_dependencies.bat`.
+2. Review the dependency check summary.
+3. Choose whether to install/update missing items.
+4. Double-click `run_oscimorph.bat`.
+5. App opens full-screen.
 
 ### macOS/Linux
 
-1. Run `bash run_oscimorph.sh`.
-2. Wait for dependency install.
-3. App launches and logs to `app/debug/oscimorph_run.log`.
+1. Run `bash install_dependencies.sh`.
+2. Review the dependency check summary.
+3. Choose whether to install/update missing items.
+4. Run `bash run_oscimorph.sh`.
+5. App launches and logs to `app/debug/oscimorph_run.log`.
 
 ### Manual launch
 
@@ -179,6 +183,12 @@ Preview is fast and useful for tuning motion and effect behavior, but it is not 
 - Confirm `ffmpeg` works in terminal.
 - Check `app/debug/oscimorph_run.log`.
 - Try lower resolution/FPS.
+
+### Launcher says dependencies are missing
+
+- Run `install_dependencies.bat` (Windows) or `install_dependencies.sh` (macOS/Linux).
+- Review the summary and confirm install/update.
+- Re-run the launcher after install completes.
 
 ### No reaction to audio
 

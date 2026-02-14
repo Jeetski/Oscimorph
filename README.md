@@ -27,12 +27,16 @@ Honeycomb Lab: https://www.honeycomblab.art
 - `ffmpeg` on PATH (for reliable MP4 output)
 
 **Quick Start (Windows)**
-1. Double-click `run_oscimorph.bat`.
-1. The script installs dependencies, launches the app, and logs to `app/debug/oscimorph_run.log`.
+1. Double-click `install_dependencies.bat` and review the dependency check report.
+1. Choose whether to install/update missing items.
+1. Double-click `run_oscimorph.bat` to launch (logs: `app/debug/oscimorph_run.log`).
+1. `run_oscimorph.bat` is launch-only and will prompt you to run the installer if checks fail.
 
 **Quick Start (macOS/Linux)**
-1. `bash run_oscimorph.sh`
-1. The script installs dependencies, launches the app, and logs to `app/debug/oscimorph_run.log`.
+1. `bash install_dependencies.sh` and review the dependency check report.
+1. Choose whether to install/update missing items.
+1. `bash run_oscimorph.sh` to launch (logs: `app/debug/oscimorph_run.log`).
+1. `run_oscimorph.sh` is launch-only and will prompt you to run the installer if checks fail.
 
 **Manual Run**
 ```powershell
