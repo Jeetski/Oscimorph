@@ -65,3 +65,20 @@
   - `pyproject.toml`, `requirements.txt`, and backup file(s)
 - Updated launchers to run from `app/` and install from `app/requirements.txt`.
 - Updated README and user guide paths to the new structure.
+
+### Dependency installer split and launcher preflight
+
+- Added dedicated dependency installer scripts at repo root:
+  - `install_dependencies.bat`
+  - `install_dependencies.sh`
+- Installer flow now checks first, then reports full status for:
+  - Python 3.11+, pip, ffmpeg
+  - each package in `app/requirements.txt` as `missing`, `outdated`, or `satisfied`
+- Installer now asks for confirmation before performing any install/update actions.
+- Simplified launchers to be launch-only:
+  - `run_oscimorph.bat`
+  - `run_oscimorph.sh`
+- Launchers now run preflight checks and direct users to installer scripts when dependencies are missing.
+- Updated docs for the installer-first workflow:
+  - `README.md`
+  - `app/docs/guide.md`
