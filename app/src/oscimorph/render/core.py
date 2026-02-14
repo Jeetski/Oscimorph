@@ -14,7 +14,7 @@ from moviepy import AudioFileClip, ImageSequenceClip
 from proglog import ProgressBarLogger
 from PySide6.QtGui import QFont, QPainterPath
 
-from .audio import band_at_frame, frame_count, load_and_analyze
+from ..audio import band_at_frame, frame_count, load_and_analyze
 
 _BAYER_8 = (1.0 / 64.0) * np.array(
     [

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QSpinBox,
     QSplitter,
+    QTextBrowser,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -37,8 +39,8 @@ from PySide6.QtWidgets import (
     QStyleOptionSlider,
 )
 
-from .audio import AudioAnalysis, band_at_frame, load_and_analyze
-from .render import (
+from ..audio import AudioAnalysis, band_at_frame, load_and_analyze
+from ..render import (
     RenderCancelled,
     RenderSettings,
     render_video,
@@ -796,7 +798,7 @@ class EffectWidget(QFrame):
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self._app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        self._app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         self.setWindowTitle("Oscimorph")
         self._set_branding()
         self._apply_theme()
@@ -816,6 +818,8 @@ class MainWindow(QMainWindow):
 
         self.osc_audio_sink: QAudioSink | None = None
         self.osc_audio_device: OscillatorAudioDevice | None = None
+        self.startup_audio_output: QAudioOutput | None = None
+        self.startup_player: QMediaPlayer | None = None
 
         self.audio_analysis: AudioAnalysis | None = None
         self.audio_worker: AudioAnalysisWorker | None = None
@@ -836,6 +840,8 @@ class MainWindow(QMainWindow):
         self._update_visibility()
         self._update_preview_labels(self.loop_in_ms, self.loop_out_ms)
         self._update_preview_frame()
+        QTimer.singleShot(0, self._show_startup_dialog)
+        QTimer.singleShot(0, self._play_startup_sound)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet(
@@ -947,6 +953,7 @@ class MainWindow(QMainWindow):
         preview_header.addStretch(1)
         preview_header.addWidget(preview_info)
         preview_layout.addLayout(preview_header)
+
         preview_layout.addWidget(self.preview_canvas, 1)
 
         transport = QHBoxLayout()
@@ -1004,6 +1011,138 @@ class MainWindow(QMainWindow):
 
         root_layout = QVBoxLayout(root)
         root_layout.addWidget(splitter)
+
+    def _show_startup_dialog(self) -> None:
+        dialog = QDialog(self)
+        dialog.setModal(False)
+        dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dialog.setStyleSheet(
+            f"""
+            QDialog {{
+                background-color: transparent;
+            }}
+            QFrame#splashCard {{
+                background-color: #0c0f12;
+                border: 1px solid #243238;
+                border-radius: 10px;
+            }}
+            QToolButton {{
+                background: transparent;
+                border: none;
+                color: #9FB1B7;
+                font-size: 14px;
+                padding: 2px 6px;
+            }}
+            QToolButton:hover {{
+                color: {ACCENT};
+            }}
+            QLabel {{
+                color: {ACCENT};
+            }}
+            """
+        )
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        card = QFrame()
+        card.setObjectName("splashCard")
+        layout.addWidget(card)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 10, 12, 12)
+
+        top_row = QHBoxLayout()
+        top_row.addStretch(1)
+        close_btn = QToolButton()
+        close_btn.setText("X")
+        close_btn.setToolTip("Close")
+        close_btn.clicked.connect(dialog.close)
+        top_row.addWidget(close_btn)
+        card_layout.addLayout(top_row)
+
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(8, 0, 8, 8)
+        content_row.setSpacing(16)
+
+        content_layout = content_row
+        layout.setSpacing(16)
+
+        osc_logo = QLabel()
+        logo_path = os.path.join(self._app_root, "assets", "logo.png")
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            if not pixmap.isNull():
+                osc_logo.setPixmap(pixmap.scaledToHeight(140, Qt.SmoothTransformation))
+        content_layout.addWidget(osc_logo, 0, Qt.AlignVCenter)
+
+        content = QVBoxLayout()
+        content.setSpacing(8)
+
+        title = QLabel("OSCIMORPH v1.0")
+        title.setStyleSheet("font-size: 34px; font-weight: 700;")
+        content.addWidget(title)
+
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(6)
+        honeycomb_logo = QLabel()
+        honeycomb_logo_path = os.path.join(self._app_root, "assets", "honeycomb_lab.png")
+        if os.path.exists(honeycomb_logo_path):
+            honeycomb_pixmap = QPixmap(honeycomb_logo_path)
+            if not honeycomb_pixmap.isNull():
+                honeycomb_logo.setPixmap(honeycomb_pixmap.scaledToHeight(16, Qt.SmoothTransformation))
+        brand_row.addWidget(honeycomb_logo, 0, Qt.AlignVCenter)
+
+        brand_name = QLabel("Honeycomb Lab")
+        brand_name.setStyleSheet("font-size: 12px;")
+        brand_row.addWidget(brand_name, 0, Qt.AlignVCenter)
+
+        brand_link = QLabel('<a href="https://honeycomblab.art">honeycomblab.art</a>')
+        brand_link.setOpenExternalLinks(True)
+        brand_link.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        brand_link.setStyleSheet("font-size: 12px;")
+        brand_row.addWidget(brand_link, 0, Qt.AlignVCenter)
+        brand_row.addStretch(1)
+        content.addLayout(brand_row)
+
+        changelog_link = QLabel('<a href="changelog">View changelog</a>')
+        changelog_link.setOpenExternalLinks(False)
+        changelog_link.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        changelog_link.setStyleSheet("font-size: 12px;")
+        changelog_link.linkActivated.connect(self._open_changelog_window)
+        content.addWidget(changelog_link, 0, Qt.AlignLeft)
+        content.addStretch(1)
+
+        content_layout.addLayout(content, 1)
+        card_layout.addLayout(content_row)
+
+        dialog.resize(760, 240)
+        dialog.show()
+        self._startup_dialog = dialog
+
+    def _open_changelog_window(self, _link: str) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Oscimorph Changelog")
+        dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        dialog.resize(900, 650)
+
+        layout = QVBoxLayout(dialog)
+        browser = QTextBrowser(dialog)
+        browser.setOpenExternalLinks(True)
+
+        changelog_path = os.path.join(self._app_root, "docs", "changelog.md")
+        if os.path.exists(changelog_path):
+            try:
+                with open(changelog_path, "r", encoding="utf-8") as handle:
+                    content = handle.read()
+                browser.setMarkdown(content)
+            except OSError as exc:
+                browser.setPlainText(f"Failed to load changelog:\n{exc}")
+        else:
+            browser.setPlainText("Changelog file not found: docs/changelog.md")
+
+        layout.addWidget(browser)
+        dialog.show()
+        self._changelog_dialog = dialog
 
     def _build_io_frame(self) -> None:
         self.io_frame = QGroupBox("Inputs & Output")
@@ -1129,6 +1268,41 @@ class MainWindow(QMainWindow):
         form.addRow(self._wrap_row(render_row))
 
         self.side_layout.addWidget(self.io_frame)
+
+    def _startup_sound_path(self) -> str | None:
+        assets_dir = os.path.join(self._app_root, "assets")
+        candidates = [
+            "startup.mp3",
+            "startup.wav",
+            "startup.ogg",
+            "startup.flac",
+            "startup.m4a",
+            "startup.aac",
+        ]
+        for name in candidates:
+            path = os.path.join(assets_dir, name)
+            if os.path.exists(path):
+                return path
+        exts = {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"}
+        try:
+            for file_name in os.listdir(assets_dir):
+                ext = os.path.splitext(file_name)[1].lower()
+                if ext in exts:
+                    return os.path.join(assets_dir, file_name)
+        except OSError:
+            return None
+        return None
+
+    def _play_startup_sound(self) -> None:
+        sound_path = self._startup_sound_path()
+        if not sound_path:
+            return
+        self.startup_audio_output = QAudioOutput(self)
+        self.startup_audio_output.setVolume(0.6)
+        self.startup_player = QMediaPlayer(self)
+        self.startup_player.setAudioOutput(self.startup_audio_output)
+        self.startup_player.setSource(QUrl.fromLocalFile(sound_path))
+        self.startup_player.play()
 
     def _build_shape_frame(self) -> None:
         self.shape_frame = QGroupBox("Shapes")
@@ -2102,7 +2276,7 @@ class MainWindow(QMainWindow):
             self.script_generate = None
             return
         try:
-            from .render import _load_script
+            from ..render.core import _load_script
 
             self.script_generate = _load_script(path)
         except Exception as exc:  # noqa: BLE001

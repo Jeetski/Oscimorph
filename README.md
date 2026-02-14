@@ -19,7 +19,7 @@ Honeycomb Lab: https://www.honeycomblab.art
 - Built-in shapes: ring, polygon, ellipse, heart, star, rectangle, spiral, lemniscate, cardioid, clover, superellipse
 - Audio modulation targets: `all`, `low`, `mid`, `high`, `band:<index>`, or `osc`
 - Effect stack: smoothing, displacement, thickness, glow, threshold, warp, rotation, trail, flicker, hue shift, scanline, decimate, jitter, dither, phosphor, bloom, vignette, chromatic aberration, barrel distortion, noise, horizontal jitter, vertical roll, color bleed
-- Preset save/load (JSON) with built-in presets in `presets/`
+- Preset save/load (JSON) with built-in presets in `app/presets/`
 - MP4 output via MoviePy/FFmpeg with resolution, FPS, and aspect controls
 
 **Requirements**
@@ -28,16 +28,16 @@ Honeycomb Lab: https://www.honeycomblab.art
 
 **Quick Start (Windows)**
 1. Double-click `run_oscimorph.bat`.
-1. The script installs dependencies, launches the app, and logs to `debug/oscimorph_run.log`.
+1. The script installs dependencies, launches the app, and logs to `app/debug/oscimorph_run.log`.
 
 **Quick Start (macOS/Linux)**
 1. `bash run_oscimorph.sh`
-1. The script installs dependencies, launches the app, and logs to `debug/oscimorph_run.log`.
+1. The script installs dependencies, launches the app, and logs to `app/debug/oscimorph_run.log`.
 
 **Manual Run**
 ```powershell
-python -m pip install -r requirements.txt
-set PYTHONPATH=src
+python -m pip install -r app/requirements.txt
+set PYTHONPATH=app/src
 python -m oscimorph
 ```
 
@@ -71,16 +71,16 @@ def generate(t, audio, settings):
 
 This allows fully procedural, generative, and fractal visuals driven directly by sound.
 
-Example scripts live in `scripts/` (e.g., `lissajous.py`, `spirograph.py`, `julia_set.py`).
+Example scripts live in `app/scripts/` (e.g., `lissajous.py`, `spirograph.py`, `julia_set.py`).
 
 **Presets**
 - Use the **Effects** panel to save and load JSON presets.
-- Built-in presets are stored in `presets/`.
+- Built-in presets are stored in `app/presets/`.
 
 **Output & Logs**
-- Default output: `output/output.mp4`
-- Render log: `debug/oscimorph_run.log`
-- Temporary files: `temp/`
+- Default output: `app/output/output.mp4`
+- Render log: `app/debug/oscimorph_run.log`
+- Temporary files: `app/temp/`
 
 **Controls & Tips**
 - Press `Esc` to exit (with confirmation).
@@ -88,11 +88,11 @@ Example scripts live in `scripts/` (e.g., `lissajous.py`, `spirograph.py`, `juli
 - If rendering is slow, reduce resolution or FPS.
 
 **Project Layout**
-- `src/oscimorph/`: application code (GUI, audio analysis, renderer)
-- `presets/`: effect presets
-- `scripts/`: example procedural geometry scripts
-- `assets/`: icons and branding
-- `output/`, `debug/`, `temp/`: runtime directories
+- `app/src/oscimorph/`: application code (GUI, audio analysis, renderer)
+- `app/presets/`: effect presets
+- `app/scripts/`: example procedural geometry scripts
+- `app/assets/`: icons and branding
+- `app/output/`, `app/debug/`, `app/temp/`: runtime directories
 
 **Who Oscimorph Is For**
 - Music producers who want custom visuals for their tracks
@@ -102,4 +102,4 @@ Example scripts live in `scripts/` (e.g., `lissajous.py`, `spirograph.py`, `juli
 Not intended as a VJ performance tool or real-time live visuals (yet).
 
 **License**
-MIT License. See `legal/LICENSE.txt`.
+MIT License. See `app/legal/LICENSE.txt`.
