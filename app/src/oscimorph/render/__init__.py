@@ -1,38 +1,46 @@
 from .pipeline import RenderCancelled, RenderSettings, render_video
-from .modulation import _mod_value, _oscillator_value, _rotation_direction, _script_audio_payload
+from .modulation import _apply_hue_shift, _mod_value, _oscillator_value, _rotation_direction, _script_audio_payload
 from .postfx import (
     _apply_barrel_distortion,
     _apply_bloom,
     _apply_chromatic_aberration,
     _apply_color_bleed,
+    _apply_color_bleed_advanced,
     _apply_dither,
+    _flicker_factor,
+    _apply_trail,
+    _apply_scanlines,
     _apply_horizontal_jitter,
-    _apply_hue_shift,
     _apply_noise,
     _apply_phosphor_mask,
     _apply_vertical_roll,
     _apply_vignette,
 )
-from .text import _text_to_polylines
+from .text import _load_script, _text_to_polylines
 
 __all__ = [
     "RenderSettings",
     "RenderCancelled",
     "render_video",
+    "_apply_hue_shift",
     "_mod_value",
     "_oscillator_value",
     "_rotation_direction",
     "_script_audio_payload",
+    "_load_script",
     "_text_to_polylines",
-    "_apply_hue_shift",
     "_apply_bloom",
     "_apply_vignette",
     "_apply_phosphor_mask",
     "_apply_chromatic_aberration",
     "_apply_barrel_distortion",
+    "_flicker_factor",
+    "_apply_scanlines",
     "_apply_noise",
     "_apply_horizontal_jitter",
     "_apply_vertical_roll",
     "_apply_color_bleed",
+    "_apply_color_bleed_advanced",
     "_apply_dither",
+    "_apply_trail",
 ]

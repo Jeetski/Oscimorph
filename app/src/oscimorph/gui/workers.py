@@ -1,3 +1,3 @@
-from .legacy import AudioAnalysisWorker, OscillatorAudioDevice, RenderWorker
+from .implementation import AudioAnalysisWorker, OscillatorAudioDevice, RenderWorker
 
 __all__ = ["RenderWorker", "AudioAnalysisWorker", "OscillatorAudioDevice"]

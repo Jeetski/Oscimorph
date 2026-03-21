@@ -1,3 +1,3 @@
-from .legacy import MainWindow
+from .implementation import MainWindow
 
 __all__ = ["MainWindow"]

@@ -1,49 +1,71 @@
 # Preset System
 
-Oscimorph presets are JSON files created/loaded from the GUI.
+Oscimorph presets are JSON snapshots of effect-panel state created and loaded from the GUI.
 
 ## Location
 
-- Default preset directory: `presets/`
-- Built-in examples already live there.
+- built-in presets live in `app/presets/`
+- saved presets can be written anywhere the user chooses
 
-## Save and Load Behavior
+## Ownership
 
-Handled in `src/oscimorph/gui/legacy.py`:
+Preset logic currently lives in `src/oscimorph/gui/implementation.py`.
 
-- Save: `_save_preset()`
-- Load: `_load_preset()`
-- Serialize: `_collect_effect_preset()`
-- Apply: `_apply_effect_preset()`
+Relevant methods:
 
-## Schema (Version 1)
+- `_collect_effect_preset()`
+- `_apply_effect_preset()`
+- `_save_preset()`
+- `_load_preset()`
+
+## What Gets Saved
+
+Presets are focused on effect state, not the full project/session.
+
+They typically capture:
+
+- active effect list
+- effect parameter values
+- control metadata needed to restore modulated controls
+
+This now includes richer effect controls such as dither mode and palette levels, glow blend/threshold, trail decay/blend, scanline thickness/spacing/style, noise mode/grain, jitter axis/style, bleed radius/direction, flicker style/speed/floor, phosphor mask style/stripe width, and barrel falloff.
+
+They do not serve as a complete project file for inputs, audio sources, or all render settings.
+
+## Schema Shape
+
+The format is intentionally permissive so older presets keep loading when new controls are added.
+
+Example shape:
 
 ```json
 {
   "version": 1,
   "active_effects": ["smoothing", "displace", "glow"],
   "controls": {
-    "mod_displace_x_amount": { "amount": 6.0, "band": "band:1" },
-    "mod_displace_y_amount": { "amount": 6.0, "band": "band:2" }
+    "mod_displace_x_amount": {
+      "amount": 6.0,
+      "band": "band:1"
+    }
   },
   "smoothing_amount": 0.2,
   "glow_enabled": true
 }
 ```
 
-## Rules
+## Compatibility Rules
 
-- `active_effects` must be a list.
-- `controls` must be an object/map.
-- Unknown keys are ignored when applying presets.
-- Widget values are type-coerced by control type (double/int/combo/check).
+- root value must be a JSON object
+- `active_effects` must be a list when present
+- `controls` must be an object when present
+- unknown keys are ignored
+- known controls are restored using widget-aware coercion
 
-## Error Handling
+## Failure Handling
 
-Load failures show warning dialogs for:
+Load failures surface through warning dialogs for:
 
 - invalid JSON
-- non-object root
+- non-object roots
 - schema mismatches
-- filesystem errors
-
+- read/write filesystem errors

@@ -7,6 +7,9 @@ set "ROOT_DIR=%~dp0"
 set "APP_DIR=%ROOT_DIR%app"
 set "REQ_FILE=%APP_DIR%\requirements.txt"
 set "OUTDATED_FILE=%TEMP%\oscimorph_outdated.txt"
+set "VENV_DIR=%APP_DIR%\.venv"
+set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
+set "VENV_PIP=%VENV_DIR%\Scripts\pip.exe"
 
 if not exist "%APP_DIR%" (
   echo Missing app directory: "%APP_DIR%"
@@ -32,6 +35,7 @@ set "OUTDATED_SET="
 set "PY_STATUS=satisfied"
 set "PIP_STATUS=satisfied"
 set "FFMPEG_STATUS=satisfied"
+set "VENV_STATUS=satisfied"
 
 if exist "%OUTDATED_FILE%" del "%OUTDATED_FILE%" >nul 2>&1
 
@@ -54,17 +58,31 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 if %NEED_PY_INSTALL% EQU 0 if %NEED_PY_UPGRADE% EQU 0 (
-  python -m pip --version >nul 2>&1
+  if not exist "%VENV_PYTHON%" (
+    python -m venv "%VENV_DIR%" >nul 2>&1
+  )
+
+  if not exist "%VENV_PYTHON%" (
+    set "CHECKS_FAILED=1"
+    set "PIP_STATUS=missing"
+    set "VENV_STATUS=missing"
+  ) else (
+    set "VENV_STATUS=satisfied"
+  )
+)
+
+if %NEED_PY_INSTALL% EQU 0 if %NEED_PY_UPGRADE% EQU 0 if %CHECKS_FAILED% EQU 0 (
+  "%VENV_PYTHON%" -m pip --version >nul 2>&1
   if %ERRORLEVEL% NEQ 0 (
     set "CHECKS_FAILED=1"
     set "PIP_STATUS=missing"
   ) else (
-    python -m pip list --outdated --format=freeze > "%OUTDATED_FILE%" 2>nul
+    "%VENV_PYTHON%" -m pip list --outdated --format=freeze > "%OUTDATED_FILE%" 2>nul
     set "OUTDATED_CHECK_OK=1"
     if %ERRORLEVEL% NEQ 0 set "OUTDATED_CHECK_OK=0"
 
     for /f "usebackq tokens=1 delims==<>~! " %%P in (`findstr /R /V /C:"^[ ]*$" /C:"^[ ]*#" "%REQ_FILE%"`) do (
-      python -m pip show "%%P" >nul 2>&1
+      "%VENV_PYTHON%" -m pip show "%%P" >nul 2>&1
       if !ERRORLEVEL! NEQ 0 (
         set "MISSING_PKGS=!MISSING_PKGS! %%P"
         set "MISSING_SET=!MISSING_SET!|%%P|"
@@ -102,6 +120,8 @@ if %NEED_PY_UPGRADE% EQU 1 if %CAN_AUTO_PY% EQU 0 echo   Action required: manual
 
 echo - pip: %PIP_STATUS%
 if %CHECKS_FAILED% EQU 1 echo   Action required: repair pip for current Python install
+echo - project virtual environment: %VENV_STATUS%
+if "%VENV_STATUS%"=="missing" echo   Action required: create project virtual environment
 
 echo - ffmpeg: %FFMPEG_STATUS%
 if %NEED_FFMPEG% EQU 1 if %CAN_AUTO_FFMPEG% EQU 1 echo   Action available: install via winget
@@ -112,7 +132,7 @@ set "ANY_PKG_ISSUE=0"
 for /f "usebackq tokens=1 delims==<>~! " %%P in (`findstr /R /V /C:"^[ ]*$" /C:"^[ ]*#" "%REQ_FILE%"`) do (
   set "PKG_STATE=unknown (python/pip unavailable)"
   if %NEED_PY_INSTALL% EQU 0 if %NEED_PY_UPGRADE% EQU 0 if %CHECKS_FAILED% EQU 0 (
-    python -m pip show "%%P" >nul 2>&1
+    "%VENV_PYTHON%" -m pip show "%%P" >nul 2>&1
     if !ERRORLEVEL! NEQ 0 (
       set "PKG_STATE=missing"
       set "ANY_PKG_ISSUE=1"
@@ -134,6 +154,7 @@ set "ALL_OK=1"
 if not "%NEED_PY_INSTALL%"=="0" set "ALL_OK=0"
 if not "%NEED_PY_UPGRADE%"=="0" set "ALL_OK=0"
 if not "%CHECKS_FAILED%"=="0" set "ALL_OK=0"
+if not "%VENV_STATUS%"=="satisfied" set "ALL_OK=0"
 if not "%ANY_PKG_ISSUE%"=="0" set "ALL_OK=0"
 if not "%NEED_FFMPEG%"=="0" set "ALL_OK=0"
 
@@ -181,9 +202,17 @@ if %ERRORLEVEL% NEQ 0 (
   exit /b 1
 )
 
-python -m pip install --upgrade pip
+if not exist "%VENV_PYTHON%" (
+  python -m venv "%VENV_DIR%"
+  if %ERRORLEVEL% NEQ 0 (
+    echo Failed to create project virtual environment.
+    exit /b 1
+  )
+)
+
+"%VENV_PYTHON%" -m pip install --upgrade pip
 if %ERRORLEVEL% NEQ 0 (
-  echo Failed to upgrade pip.
+  echo Failed to upgrade pip in project virtual environment.
   exit /b 1
 )
 
@@ -200,9 +229,9 @@ if not defined PKGS_TO_INSTALL (
 )
 
 if defined PKGS_TO_INSTALL (
-  python -m pip install --upgrade %PKGS_TO_INSTALL%
+  "%VENV_PYTHON%" -m pip install --upgrade %PKGS_TO_INSTALL%
   if %ERRORLEVEL% NEQ 0 (
-    echo Failed to install/update required Python packages.
+    echo Failed to install/update required Python packages in project virtual environment.
     exit /b 1
   )
 )

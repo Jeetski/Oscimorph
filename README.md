@@ -1,5 +1,7 @@
 # Oscimorph
 
+Current release status: `alpha v0.1`
+
 Oscimorph is a full-screen desktop app for turning media, shapes, text, or scripts into oscilloscope-style, audio-reactive MP4 videos.
 Oscimorph treats sound as signal and visuals as geometry.
 
@@ -18,19 +20,22 @@ Honeycomb Lab: https://www.honeycomblab.art
 - Render modes: edge-only or edge-overlay with waveform line and lissajous overlay
 - Built-in shapes: ring, polygon, ellipse, heart, star, rectangle, spiral, lemniscate, cardioid, clover, superellipse
 - Audio modulation targets: `all`, `low`, `mid`, `high`, `band:<index>`, or `osc`
-- Effect stack: smoothing, displacement, thickness, glow, threshold, warp, rotation, trail, flicker, hue shift, scanline, decimate, jitter, dither, phosphor, bloom, vignette, chromatic aberration, barrel distortion, noise, horizontal jitter, vertical roll, color bleed
+- Effect stack: smoothing, displacement, thickness, glow, threshold, warp, rotation, trail, flicker, hue shift, scanline, decimate, jitter, dither (Bayer, ordered, or diffusion with palette reduction and audio modulation), phosphor, bloom, vignette, chromatic aberration, barrel distortion, noise, horizontal jitter, vertical roll, color bleed
+- Expanded controls in the current alpha include glow threshold/blend, trail decay/blend, scanline thickness/spacing/style, noise mode/grain, jitter axis/style, bleed radius/direction, flicker style/speed/floor, phosphor mask style/stripe width, and barrel falloff
 - Preset save/load (JSON) with built-in presets in `app/presets/`
 - MP4 output via MoviePy/FFmpeg with resolution, FPS, and aspect controls
 
 **Requirements**
 - Python 3.11+
 - `ffmpeg` on PATH (for reliable MP4 output)
+- Dependencies are installed into `app/.venv/` by the installer scripts
 
 **Quick Start (Windows)**
 1. Double-click `install_dependencies.bat` and review the dependency check report.
 1. Choose whether to install/update missing items.
+1. The installer will create/update the project virtual environment at `app/.venv/`.
 1. Double-click `run_oscimorph.bat` to launch (logs: `app/debug/oscimorph_run.log`).
-1. `run_oscimorph.bat` is launch-only and will prompt you to run the installer if checks fail.
+1. `run_oscimorph.bat` verifies the project virtual environment and `ffmpeg` before launching.
 
 **Quick Start (macOS/Linux)**
 1. `bash install_dependencies.sh` and review the dependency check report.
@@ -40,9 +45,10 @@ Honeycomb Lab: https://www.honeycomblab.art
 
 **Manual Run**
 ```powershell
-python -m pip install -r app/requirements.txt
+python -m venv app/.venv
+app\.venv\Scripts\python -m pip install -r app/requirements.txt
 set PYTHONPATH=app/src
-python -m oscimorph
+app\.venv\Scripts\python -m oscimorph
 ```
 
 If you install the package in editable mode, you can also run `oscimorph` directly.

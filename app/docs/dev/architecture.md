@@ -1,71 +1,93 @@
 # Architecture
 
-Oscimorph is a desktop PySide6 application with a CPU-based render pipeline.
+Oscimorph is a full-screen PySide6 desktop app with a CPU render pipeline built on NumPy, OpenCV, Pillow, librosa, and MoviePy.
 
 ## Layers
 
-1. UI + interaction:
-- `src/oscimorph/gui/`
-- Owns controls, preview state, playback controls, and render job kickoff.
+1. UI and session orchestration
+- `src/oscimorph/gui/implementation.py`
+- Owns window creation, theming, startup splash, transport, control wiring, preview state, preset actions, and render kickoff.
 
-2. Audio analysis:
+2. Audio analysis
 - `src/oscimorph/audio.py`
-- Loads audio, computes normalized multi-band energies, and provides frame-index lookup.
+- Loads source audio with librosa, computes per-frame band energies, and exposes frame-aligned lookup helpers.
 
-3. Render pipeline:
-- `src/oscimorph/render/`
-- Builds source frames, applies edge + overlays + post effects, and writes MP4.
+3. Rendering and export
+- `src/oscimorph/render/core.py`
+- Builds source frames or polylines, applies modulation and post effects, then exports MP4 through MoviePy/FFmpeg.
 
-## Current Package Layout
+## Package Layout Today
 
-The code was recently split into packages:
+The package split is real, but most behavior is still concentrated in two files.
 
-- `src/oscimorph/gui/__init__.py`: public GUI exports.
-- `src/oscimorph/gui/main_window.py`, `preview.py`, `workers.py`, `widgets.py`: compatibility exports.
-- `src/oscimorph/gui/legacy.py`: still contains almost all concrete GUI logic.
+### GUI package
 
-- `src/oscimorph/render/__init__.py`: public render exports.
-- `src/oscimorph/render/pipeline.py`, `settings.py`, `modulation.py`, `postfx.py`, `text.py`: compatibility exports.
-- `src/oscimorph/render/core.py`: still contains almost all concrete rendering logic.
+- `src/oscimorph/gui/__init__.py`: public GUI exports
+- `src/oscimorph/gui/main_window.py`: re-exports `MainWindow`
+- `src/oscimorph/gui/preview.py`: re-exports `PreviewCanvas`
+- `src/oscimorph/gui/workers.py`: re-exports worker classes
+- `src/oscimorph/gui/widgets.py`: re-exports custom widgets
+- `src/oscimorph/gui/implementation.py`: actual implementation for all of the above
+
+### Render package
+
+- `src/oscimorph/render/__init__.py`: public render exports
+- `src/oscimorph/render/settings.py`: `RenderSettings` and `RenderCancelled`
+- `src/oscimorph/render/modulation.py`: band selection, oscillator math, hue shift
+- `src/oscimorph/render/postfx.py`: image-space post-processing helpers
+- `src/oscimorph/render/text.py`: script loading, text outline extraction, polyline transforms
+- `src/oscimorph/render/progress.py`: progress logger and temp directory setup
+- `src/oscimorph/render/pipeline.py`: compatibility export for `render_video`
+- `src/oscimorph/render/core.py`: main render pipeline implementation
 
 ## Runtime Flow
 
-1. `python -m oscimorph` calls `main()` in `src/oscimorph/app.py`.
-2. `QApplication` is created.
-3. `MainWindow` is created, themed, and shown full-screen.
-4. User changes controls; preview updates from a lightweight preview path.
-5. On render:
-- GUI builds `RenderSettings`.
-- `RenderWorker` thread calls `render_video(settings, ...)`.
-- Progress updates flow back via Qt signals.
-6. Final MP4 is written via MoviePy + FFmpeg.
+1. `python -m oscimorph` enters `src/oscimorph/__main__.py`.
+2. `main()` in `src/oscimorph/app.py` creates `QApplication`.
+3. `MainWindow` is instantiated and shown full-screen.
+4. Unless `OSCIMORPH_SKIP_STARTUP` is truthy, the startup splash and startup sound are shown on launch.
+5. UI changes feed the lightweight preview path on the main thread.
+6. Audio file analysis is moved onto `AudioAnalysisWorker` for responsive updates.
+7. Final export is moved onto `RenderWorker`, which calls `render_video(...)`.
+8. Progress signals update the UI while MoviePy writes the final MP4.
 
 ## Data Contracts
 
-### RenderSettings
+### `RenderSettings`
 
-Defined in `src/oscimorph/render/core.py` (re-exported via `src/oscimorph/render/settings.py`).
-Contains:
+Defined in `src/oscimorph/render/settings.py`.
 
-- I/O paths
-- Media mode settings
-- Audio mode settings
-- Resolution/FPS/aspect
-- Modulation and post-effect controls
+It includes:
 
-### AudioAnalysis
+- input/output paths
+- source mode selection for media, shapes, text, or script
+- audio mode selection for file or oscillator
+- output size and FPS
+- edge/overlay toggles
+- modulation targets and amounts
+- oscillator parameters
+- post-processing controls
 
-Defined in `src/oscimorph/audio.py`:
+### `AudioAnalysis`
 
-- `audio`: `(channels, samples)`
-- `sr`
-- `frame_hop`
-- `band_energies`: `(frames, bands)`
-- `duration`
+Defined in `src/oscimorph/audio.py`.
+
+Fields:
+
+- `audio`: waveform array shaped `(channels, samples)`
+- `sr`: sample rate
+- `frame_hop`: analysis hop used for frame alignment
+- `band_energies`: normalized band matrix shaped `(frames, bands)`
+- `duration`: source duration in seconds
 
 ## Threading Model
 
-- Main UI thread: interaction, preview drawing, controls.
-- Render thread (`RenderWorker`): final render execution and callbacks.
-- Audio analysis thread (`AudioAnalysisWorker`): analysis for responsive UI preview.
+- Main thread: window, controls, preview state, dialogs, and transport
+- `AudioAnalysisWorker`: background analysis for audio-file preview updates
+- `RenderWorker`: background final render and export
 
+## Non-Code Runtime Support
+
+- Root launcher scripts perform dependency preflight before startup.
+- The render pipeline writes progress lines into `app/debug/oscimorph_run.log`.
+- `app/scripts/smoke_startup.py` launches and closes the window quickly for CI smoke coverage.

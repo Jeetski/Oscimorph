@@ -1,5 +1,7 @@
 # Oscimorph User Guide
 
+Current release status: `alpha v0.1`
+
 This guide is for creators who want to make oscilloscope-style videos without writing code.
 
 ## What Oscimorph Does
@@ -23,7 +25,8 @@ Oscimorph turns visual outlines into audio-reactive videos:
 2. Review the dependency check summary.
 3. Choose whether to install/update missing items.
 4. Double-click `run_oscimorph.bat`.
-5. App opens full-screen.
+5. The launcher checks Python and required packages before startup.
+6. The app opens full-screen.
 
 ### macOS/Linux
 
@@ -31,15 +34,22 @@ Oscimorph turns visual outlines into audio-reactive videos:
 2. Review the dependency check summary.
 3. Choose whether to install/update missing items.
 4. Run `bash run_oscimorph.sh`.
-5. App launches and logs to `app/debug/oscimorph_run.log`.
+5. The launcher checks Python and required packages before startup.
+6. The app launches and logs to `app/debug/oscimorph_run.log`.
 
 ### Manual launch
 
 ```powershell
-python -m pip install -r app/requirements.txt
+python -m venv app/.venv
+app\.venv\Scripts\python -m pip install -r app/requirements.txt
 set PYTHONPATH=app/src
-python -m oscimorph
+app\.venv\Scripts\python -m oscimorph
 ```
+
+Startup notes:
+
+- The normal app launch shows the startup splash and plays startup audio when available.
+- For automation or smoke tests, `OSCIMORPH_SKIP_STARTUP=1` skips that launch presentation.
 
 ## First Render (Fast Path)
 
@@ -108,7 +118,7 @@ Built-in shapes:
 
 - No external audio file required.
 - Choose waveform (`Sine`, `Triangle`, `Square`, `Saw`), frequency, depth, and mix.
-- Optional oscillator audio monitor can play generated tone.
+- Optional **Oscillator Audio Monitor** can play the generated tone.
 
 ## Effects Overview
 
@@ -119,29 +129,30 @@ Core modulation effects:
 - Smoothing
 - Displace (X/Y with band targets)
 - Thickness Mod
-- Glow (toggle + mod + radius)
+- Glow (toggle + mod + radius + threshold + blend)
 - Threshold Mod
 - Warp (amount + speed)
 - Rotation (with direction)
 
 Additional style/post effects:
 
-- Trail
-- Flicker
+- Trail (amount + decay + blend)
+- Flicker (amount + band + style + speed + floor)
 - Hue Shift
-- Scanline
+- Scanline (amount + speed + thickness + spacing + dark/light style)
 - Decimate
-- Jitter
-- Dither
-- Phosphor Mask
+- Jitter (amount + band + axis + random/stepped style)
+- Dither:
+  Bayer 8x8, ordered 4x4, or diffusion modes with palette level control and optional audio-reactive amount modulation
+- Phosphor Mask (amount + RGB/grille/slot style + stripe width)
 - Bloom
 - Vignette
 - Chromatic Aberration
-- Barrel Distortion
-- Noise
+- Barrel Distortion (amount + falloff)
+- Noise (amount + RGB/monochrome mode + grain)
 - Horizontal Jitter
 - Vertical Roll
-- Color Bleed
+- Color Bleed (amount + radius + direction)
 
 Band targets available in modulators:
 
@@ -175,6 +186,8 @@ Preview is fast and useful for tuning motion and effect behavior, but it is not 
 - Default output file: `app/output/output.mp4`
 - Runtime/render log: `app/debug/oscimorph_run.log`
 - Temp workspace: `app/temp/`
+- Built-in presets: `app/presets/`
+- Example scripts: `app/scripts/`
 
 ## Troubleshooting
 
@@ -183,6 +196,7 @@ Preview is fast and useful for tuning motion and effect behavior, but it is not 
 - Confirm `ffmpeg` works in terminal.
 - Check `app/debug/oscimorph_run.log`.
 - Try lower resolution/FPS.
+- Try a short render in Shapes mode first to isolate media/script-specific issues.
 
 ### Launcher says dependencies are missing
 

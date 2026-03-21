@@ -1,0 +1,49 @@
+name: Windows Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  startup-and-render-smoke:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        shell: powershell
+        run: choco install ffmpeg -y
+
+      - name: Install dependencies into project venv
+        shell: powershell
+        run: cmd /c "echo Y| install_dependencies.bat"
+
+      - name: Run Windows startup smoke test
+        shell: powershell
+        env:
+          PYTHONPATH: app/src
+          OSCIMORPH_SKIP_STARTUP: "1"
+        run: .\app\.venv\Scripts\python.exe app\scripts\smoke_startup.py
+
+      - name: Run Windows render smoke test
+        shell: powershell
+        env:
+          PYTHONPATH: app/src
+        run: .\app\.venv\Scripts\python.exe app\scripts\smoke_render.py
+
+      - name: Verify render artifact exists
+        shell: powershell
+        run: |
+          if (!(Test-Path "app\output\smoke_render.mp4")) { throw "smoke_render.mp4 was not created" }
+          $size = (Get-Item "app\output\smoke_render.mp4").Length
+          if ($size -le 0) { throw "smoke_render.mp4 is empty" }

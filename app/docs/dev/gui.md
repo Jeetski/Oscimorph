@@ -1,85 +1,88 @@
 # GUI Internals
 
-Primary implementation is `src/oscimorph/gui/legacy.py`.
+The concrete GUI is implemented almost entirely in `src/oscimorph/gui/implementation.py`.
 
-## Main Components
+## Main Classes
 
-- `MainWindow`: top-level orchestration.
-- `PreviewCanvas`: custom QWidget rendering proxy preview visuals.
-- `LoopSlider`: timeline with loop in/out handles.
-- `RenderWorker`: QThread wrapper for final rendering.
-- `AudioAnalysisWorker`: QThread wrapper for audio analysis.
-- `OscillatorAudioDevice`: optional oscillator tone monitor output.
+- `MainWindow`: top-level app shell and orchestration layer
+- `PreviewCanvas`: custom `QWidget` that draws the lightweight preview image
+- `LoopSlider`: timeline scrubber with loop in/out handles
+- `RenderWorker`: `QThread` wrapper around `render_video(...)`
+- `AudioAnalysisWorker`: `QThread` wrapper around `load_and_analyze(...)`
+- `OscillatorAudioDevice`: optional tone monitor for oscillator mode
 
-## UI Sections
+## Window Structure
 
-1. Preview area:
-- Logo/title row
-- Preview canvas
-- Transport controls
-- Timeline with loop markers
-- Time labels
+### Preview side
 
-2. Side panel:
-- Inputs & Output
-- Shapes
-- Text
-- Script
-- Effects
-- Oscillator
+- branding/title row
+- preview canvas
+- transport controls
+- timeline and loop range controls
+- time readouts
+- render progress/status controls
 
-3. Startup splash:
-- Frameless popup dialog with branding and close `X`.
+### Control side
+
+- Inputs and Output
+- source-mode-specific controls for Media, Shapes, Text, and Script
+- Effects panel
+- oscillator controls when audio mode is `osc`
+
+### Startup UI
+
+- frameless splash dialog shown at launch unless `OSCIMORPH_SKIP_STARTUP` is set
+- branding image, startup audio, and in-app changelog link
 
 ## Visibility Rules
 
-`_update_visibility()` toggles sections based on mode:
+`_update_visibility()` is the main section switcher.
 
-- `media`: enables media picker
-- `shapes`: shows shape controls
-- `text`: shows text controls
-- `script`: shows script controls
-- `audio=file`: enables audio path picker
-- `audio=osc`: shows oscillator controls and timeline duration sync
+- `media` shows media path controls
+- `shapes` shows procedural shape controls
+- `text` shows text entry/font controls
+- `script` shows script path controls
+- `audio_mode == "file"` shows audio file controls
+- `audio_mode == "osc"` shows oscillator controls and uses oscillator duration for preview/render timing
 
-## Preview Update Path
+## Preview Path
 
-`_update_preview_frame()`:
+Preview is intentionally fast and approximate.
 
-1. Collects current settings.
-2. Pulls audio bands for current preview time.
-3. Computes modulation signals.
-4. Builds shape/text/script polylines.
-5. Passes state to `PreviewCanvas.update_state(...)`.
+`_update_preview_frame()` does the following:
 
-`PreviewCanvas._render_image()` handles:
+1. collects the current UI state
+2. resolves preview time and audio band values
+3. computes modulation values and oscillator contribution
+4. builds preview geometry for shape, text, or script modes
+5. hands state to `PreviewCanvas.update_state(...)`
 
-- Geometry drawing (shape or polylines)
-- Some effect approximations (trail, scanline, flicker, etc.)
-- Post-processing call chain for several effects
+`PreviewCanvas` then renders a proxy image by drawing geometry and applying a subset of effect approximations.
 
-## Important Behavior Notes
+Important consequences:
 
-- Preview uses a proxy renderer; final render is more complete.
-- Preview timing uses `preview_fps` (default 30), independent from output FPS control.
-- Media mode preview is intentionally limited and not a full media-edge preview.
+- preview quality is lower than final render quality
+- preview uses fixed `preview_fps` timing instead of output FPS
+- media mode preview is limited and does not fully reproduce the final edge pipeline
 
-## Event Wiring
+## Rendering and Workers
 
-Most controls connect to `_update_preview_frame()`:
+- `AudioAnalysisWorker` is created when an audio file must be analyzed without blocking the UI
+- `RenderWorker` is created when the user starts a final export
+- both workers communicate back through Qt signals
 
-- spinboxes: `valueChanged`
-- checkboxes: `toggled`
-- comboboxes: `currentIndexChanged`
+## Presets and UI Ownership
 
-Transport controls update `preview_time` and optionally sync with `QMediaPlayer`.
+Preset logic currently belongs to the GUI layer.
 
-## Preset Hooks in GUI
-
-The GUI owns preset save/load:
+Key methods:
 
 - `_collect_effect_preset()`
 - `_apply_effect_preset()`
 - `_save_preset()`
 - `_load_preset()`
 
+## Coupling Notes
+
+The GUI still imports several underscored helpers from `oscimorph.render`.
+That keeps the preview path moving, but it means GUI and render internals are still tightly coupled and should be treated carefully during refactors.

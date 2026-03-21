@@ -1,134 +1,40 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-import tempfile
-import time
 from typing import Callable, List
-import colorsys
 
 import cv2
 import numpy as np
 from PIL import Image
 from moviepy import AudioFileClip, ImageSequenceClip
-from proglog import ProgressBarLogger
-from PySide6.QtGui import QFont, QPainterPath
 
-from ..audio import band_at_frame, frame_count, load_and_analyze
-
-_BAYER_8 = (1.0 / 64.0) * np.array(
-    [
-        [0, 32, 8, 40, 2, 34, 10, 42],
-        [48, 16, 56, 24, 50, 18, 58, 26],
-        [12, 44, 4, 36, 14, 46, 6, 38],
-        [60, 28, 52, 20, 62, 30, 54, 22],
-        [3, 35, 11, 43, 1, 33, 9, 41],
-        [51, 19, 59, 27, 49, 17, 57, 25],
-        [15, 47, 7, 39, 13, 45, 5, 37],
-        [63, 31, 55, 23, 61, 29, 53, 21],
-    ],
-    dtype=np.float32,
+from ..audio import AudioAnalysis, band_at_frame, frame_count, load_and_analyze
+from .modulation import (
+    _apply_hue_shift,
+    _mod_value,
+    _oscillator_value,
+    _rotation_direction,
+    _script_audio_payload,
 )
-
-
-@dataclass
-class RenderSettings:
-    media_path: str
-    audio_path: str
-    output_path: str
-    audio_mode: str = "file"  # "file" or "osc"
-    osc_duration: float = 10.0
-    width: int = 1280
-    height: int = 720
-    fps: int = 30
-    enable_line: bool = True
-    enable_lissajous: bool = True
-    enable_glow: bool = True
-    bands: int = 5
-    preserve_aspect: bool = True
-    edge_mode: str = "edge_overlay"
-    edge_method: str = "sobel"
-    edge_threshold: float = 0.08
-    glow_strength: float = 0.85
-    color_rgb: tuple[int, int, int] = (0, 255, 204)
-    smoothing_enabled: bool = False
-    smoothing_amount: float = 0.2
-    mod_displace_x_amount: float = 6.0
-    mod_displace_x_band: str = "low"
-    mod_displace_y_amount: float = 6.0
-    mod_displace_y_band: str = "mid"
-    mod_thickness_amount: float = 3.0
-    mod_thickness_band: str = "all"
-    mod_glow_amount: float = 1.0
-    mod_glow_band: str = "all"
-    mod_threshold_amount: float = 0.05
-    mod_threshold_band: str = "all"
-    mod_warp_amount: float = 8.0
-    mod_warp_band: str = "high"
-    mod_warp_speed_amount: float = 2.0
-    mod_warp_speed_band: str = "mid"
-    media_mode: str = "media"  # "media", "shapes", or "script"
-    shape_type: str = "ring"  # "ring" or "polygon"
-    polygon_sides: int = 5
-    shape_rotation: float = 0.0
-    shape_size: float = 1.0
-    star_points: int = 5
-    star_inner: float = 0.45
-    rect_width: float = 1.0
-    rect_height: float = 0.6
-    ellipse_x: float = 1.2
-    ellipse_y: float = 0.8
-    spiral_turns: float = 3.5
-    spiral_growth: float = 1.0
-    lemniscate_scale: float = 1.4
-    cardioid_scale: float = 1.0
-    clover_petals: int = 4
-    clover_scale: float = 1.2
-    superellipse_n: float = 2.6
-    superellipse_scale: float = 1.1
-    mod_rotation_amount: float = 0.0
-    mod_rotation_band: str = "all"
-    mod_rotation_direction: str = "cw"
-    script_path: str = ""
-    trail_strength: float = 0.0
-    glow_radius: float = 2.2
-    flicker_amount: float = 0.0
-    flicker_band: str = "all"
-    hue_shift_amount: float = 0.0
-    hue_shift_band: str = "all"
-    scanline_amount: float = 0.0
-    scanline_band: str = "all"
-    scanline_speed: float = 1.0
-    decimate_step: int = 1
-    jitter_amount: float = 0.0
-    jitter_band: str = "all"
-    osc_waveform: str = "sine"
-    osc_frequency: float = 0.5
-    osc_depth: float = 1.0
-    osc_mix: float = 0.0
-    text_value: str = "OSCIMORPH"
-    text_scale: float = 1.0
-    text_font_family: str = ""
-    dither_amount: float = 0.2
-    phosphor_amount: float = 0.35
-    bloom_amount: float = 0.35
-    bloom_radius: float = 2.5
-    bloom_threshold: float = 0.6
-    vignette_amount: float = 0.35
-    vignette_power: float = 1.8
-    chroma_shift_x: float = 1.0
-    chroma_shift_y: float = 0.5
-    barrel_amount: float = 0.12
-    noise_amount: float = 0.15
-    h_jitter_amount: float = 2.0
-    h_jitter_speed: float = 2.0
-    v_roll_amount: float = 8.0
-    v_roll_speed: float = 0.35
-    bleed_amount: float = 0.25
-
-
-class RenderCancelled(RuntimeError):
-    pass
+from .postfx import (
+    _apply_barrel_distortion,
+    _apply_bloom,
+    _apply_chromatic_aberration,
+    _apply_color_bleed,
+    _apply_color_bleed_advanced,
+    _apply_dither,
+    _flicker_factor,
+    _apply_scanlines,
+    _apply_trail,
+    _apply_horizontal_jitter,
+    _apply_noise,
+    _apply_phosphor_mask,
+    _apply_vertical_roll,
+    _apply_vignette,
+)
+from .progress import MoviepyLogger, ProgressTracker, ensure_temp_dir, init_progress_log
+from .settings import RenderCancelled, RenderSettings
+from .text import _load_script, _make_script_frame, _rotate_polylines, _text_to_polylines, _warp_polylines
 
 
 def _resize_frame(
@@ -410,163 +316,6 @@ def _make_shape_frame(
     return canvas
 
 
-def _load_script(path: str):
-    if not os.path.exists(path):
-        raise RuntimeError("Script file not found")
-    namespace: dict[str, object] = {}
-    with open(path, "r", encoding="utf-8") as handle:
-        code = handle.read()
-    safe_globals = {
-        "__builtins__": __builtins__,
-        "math": __import__("math"),
-        "random": __import__("random"),
-        "np": np,
-    }
-    exec(compile(code, path, "exec"), safe_globals, namespace)  # noqa: S102 - user script
-    generate = namespace.get("generate") or safe_globals.get("generate")
-    if not callable(generate):
-        raise RuntimeError("Script must define a callable generate(t, audio, settings)")
-    return generate
-
-
-def _text_to_polylines(text: str, *, font_family: str, scale: float) -> list[list[tuple[float, float]]]:
-    if not text.strip():
-        raise RuntimeError("Text is empty")
-    font = QFont(font_family)
-    if not font_family:
-        font = QFont()
-    font.setStyleStrategy(QFont.PreferAntialias)
-    font.setPointSizeF(100.0)
-    path = QPainterPath()
-    path.addText(0, 0, font, text)
-    polygons = path.toSubpathPolygons()
-    if not polygons:
-        raise RuntimeError("Unable to extract text outlines")
-
-    points: list[tuple[float, float]] = []
-    polylines: list[list[tuple[float, float]]] = []
-    for poly in polygons:
-        line = [(pt.x(), pt.y()) for pt in poly]
-        if line:
-            polylines.append(line)
-            points.extend(line)
-    if not points:
-        raise RuntimeError("Unable to extract text outlines")
-
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    width = max_x - min_x
-    height = max_y - min_y
-    if width <= 0 or height <= 0:
-        raise RuntimeError("Text outlines have zero area")
-    center_x = (min_x + max_x) / 2.0
-    center_y = (min_y + max_y) / 2.0
-    normalize = 2.0 / max(width, height)
-    scale = float(max(0.05, min(5.0, scale)))
-
-    normalized: list[list[tuple[float, float]]] = []
-    for line in polylines:
-        normalized.append(
-            [((x - center_x) * normalize * scale, (y - center_y) * normalize * scale) for x, y in line]
-        )
-    return normalized
-
-
-def _rotate_polylines(polylines: list[list[tuple[float, float]]], degrees: float) -> list[list[tuple[float, float]]]:
-    if abs(degrees) < 1e-3:
-        return polylines
-    rot = np.deg2rad(degrees)
-    cos_r = np.cos(rot)
-    sin_r = np.sin(rot)
-    rotated: list[list[tuple[float, float]]] = []
-    for line in polylines:
-        rotated.append([(x * cos_r - y * sin_r, x * sin_r + y * cos_r) for x, y in line])
-    return rotated
-
-
-def _warp_polylines(polylines: list[list[tuple[float, float]]], amount: float, phase: float) -> list[list[tuple[float, float]]]:
-    warp = max(0.0, amount) * 0.003
-    if warp <= 0.0:
-        return polylines
-    warped: list[list[tuple[float, float]]] = []
-    for line in polylines:
-        out: list[tuple[float, float]] = []
-        for x, y in line:
-            angle = np.arctan2(y, x)
-            radius = np.sqrt(x * x + y * y)
-            radius *= 1.0 + warp * np.sin(angle * 3.0 + phase)
-            out.append((np.cos(angle) * radius, np.sin(angle) * radius))
-        warped.append(out)
-    return warped
-
-
-def _script_audio_payload(bands: np.ndarray, osc: float) -> dict[str, float]:
-    if bands.size < 5:
-        return {
-            "subs": 0.0,
-            "lows": 0.0,
-            "low_mids": 0.0,
-            "high_mids": 0.0,
-            "highs": 0.0,
-            "all": float(bands.mean()) if bands.size else 0.0,
-            "osc": osc,
-        }
-    return {
-        "subs": float(bands[0]),
-        "lows": float(bands[1]),
-        "low_mids": float(bands[2]),
-        "high_mids": float(bands[3]),
-        "highs": float(bands[4]),
-        "all": float(bands.mean()),
-        "osc": osc,
-    }
-
-
-def _make_script_frame(
-    width: int,
-    height: int,
-    polylines: list[list[tuple[float, float]]],
-    *,
-    preserve_aspect: bool,
-) -> np.ndarray:
-    canvas = np.zeros((height, width, 3), dtype=np.uint8)
-    if not polylines:
-        return canvas
-    if preserve_aspect:
-        scale = min(width, height) * 0.5
-        offset_x = width * 0.5
-        offset_y = height * 0.5
-    for line in polylines:
-        if not line:
-            continue
-        if preserve_aspect:
-            pts = np.array(
-                [
-                    (
-                        offset_x + x * scale,
-                        offset_y + y * scale,
-                    )
-                    for x, y in line
-                ],
-                dtype=np.int32,
-            )
-        else:
-            pts = np.array(
-                [
-                    (
-                        (x * 0.5 + 0.5) * (width - 1),
-                        (y * 0.5 + 0.5) * (height - 1),
-                    )
-                    for x, y in line
-                ],
-                dtype=np.int32,
-            )
-        cv2.polylines(canvas, [pts], isClosed=False, color=(255, 255, 255), thickness=2, lineType=cv2.LINE_AA)
-    return canvas
-
-
 def _audio_segment(audio: np.ndarray, center: int, size: int) -> np.ndarray:
     start = max(0, center - size // 2)
     end = min(audio.shape[1], center + size // 2)
@@ -606,69 +355,6 @@ def _color_with_energy(color_rgb: tuple[int, int, int], energy: float) -> tuple[
     return (b, g, r)
 
 
-def _apply_hue_shift(color_rgb: tuple[int, int, int], shift_degrees: float) -> tuple[int, int, int]:
-    r, g, b = [c / 255.0 for c in color_rgb]
-    h, s, v = colorsys.rgb_to_hsv(r, g, b)
-    h = (h + (shift_degrees / 360.0)) % 1.0
-    r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
-    return (int(r2 * 255), int(g2 * 255), int(b2 * 255))
-
-
-def _select_band_value(bands: np.ndarray, selector: str) -> float:
-    if bands.size == 0:
-        return 0.0
-    if selector == "osc":
-        return 0.0
-    if selector == "all":
-        return float(bands.mean())
-    if selector == "low":
-        return float(bands[0])
-    if selector == "mid":
-        return float(bands[bands.size // 2])
-    if selector == "high":
-        return float(bands[-1])
-    if selector.startswith("band:"):
-        try:
-            index = int(selector.split(":", 1)[1])
-        except ValueError:
-            return float(bands.mean())
-        index = max(0, min(bands.size - 1, index))
-        return float(bands[index])
-    return float(bands.mean())
-
-
-def _oscillator_value(settings: RenderSettings, t: float) -> float:
-    phase = t * 2 * np.pi * settings.osc_frequency
-    if settings.osc_waveform == "triangle":
-        raw = 2.0 * np.abs(2.0 * ((phase / (2 * np.pi)) % 1.0) - 1.0) - 1.0
-    elif settings.osc_waveform == "square":
-        raw = 1.0 if np.sin(phase) >= 0 else -1.0
-    elif settings.osc_waveform == "saw":
-        raw = 2.0 * ((phase / (2 * np.pi)) % 1.0) - 1.0
-    else:
-        raw = np.sin(phase)
-    value = raw * float(settings.osc_depth)
-    return float(max(-1.0, min(1.0, value)) * 0.5 + 0.5)
-
-
-def _mod_value(bands: np.ndarray, selector: str, osc: float, osc_mix: float) -> float:
-    if selector == "osc":
-        return osc
-    audio = _select_band_value(bands, selector)
-    if osc_mix <= 0.0:
-        return audio
-    mix = max(0.0, min(1.0, osc_mix))
-    return audio * (1.0 - mix) + osc * mix
-
-
-def _rotation_direction(direction: str, t: float) -> float:
-    if direction == "ccw":
-        return -1.0
-    if direction == "alternate":
-        return 1.0 if np.sin(2 * np.pi * t) >= 0 else -1.0
-    return 1.0
-
-
 def _edge_oscilloscope(
     frame_rgb: np.ndarray,
     color_rgb: tuple[int, int, int],
@@ -678,6 +364,8 @@ def _edge_oscilloscope(
     glow_strength: float,
     thickness: int,
     glow_radius: float,
+    glow_threshold: float,
+    glow_blend: str,
 ) -> np.ndarray:
     gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
     if method == "canny":
@@ -700,9 +388,14 @@ def _edge_oscilloscope(
 
     core = mag
     glow = cv2.GaussianBlur(mag, (0, 0), sigmaX=max(0.5, glow_radius))
-    glow = np.clip(glow, 0, 1)
+    glow = np.clip((glow - glow_threshold) / max(1e-6, 1.0 - glow_threshold), 0, 1)
 
-    intensity = np.clip(core * 1.0 + glow * glow_strength, 0, 1)
+    if glow_blend == "screen":
+        intensity = 1.0 - (1.0 - core) * (1.0 - glow * glow_strength)
+    elif glow_blend == "soft":
+        intensity = np.clip(core * 0.85 + glow * glow_strength * 0.7, 0, 1)
+    else:
+        intensity = np.clip(core + glow * glow_strength, 0, 1)
     color = np.array(color_rgb, dtype=np.float32) / 255.0
     rgb = (intensity[..., None] * color * 255.0).astype(np.uint8)
     return rgb
@@ -723,6 +416,8 @@ def _draw_waveform(
     enable_glow: bool,
     decimate_step: int,
     jitter_amount: float,
+    jitter_axis: str,
+    jitter_style: str,
 ) -> None:
     height, width = img_bgr.shape[:2]
     energy = float(band_values.mean())
@@ -736,7 +431,12 @@ def _draw_waveform(
         ys = ys[::decimate_step]
     if jitter_amount > 0.0:
         jitter = (np.random.rand(ys.size) - 0.5) * 2.0 * jitter_amount
-        ys = ys + jitter
+        if jitter_style == "stepped":
+            jitter = np.round(jitter)
+        if jitter_axis in {"xy", "y"}:
+            ys = ys + jitter
+        if jitter_axis in {"xy", "x"}:
+            xs = xs + jitter.astype(np.int32)
     ys = ys.astype(np.int32)
     pts = np.stack([xs, ys], axis=1)
     color = _color_with_energy(color_rgb, energy)
@@ -755,6 +455,8 @@ def _draw_lissajous(
     enable_glow: bool,
     decimate_step: int,
     jitter_amount: float,
+    jitter_axis: str,
+    jitter_style: str,
 ) -> None:
     height, width = img_bgr.shape[:2]
     points = lissajous.copy()
@@ -764,6 +466,12 @@ def _draw_lissajous(
     points[:, 1] = (points[:, 1] * 0.5 + 0.5) * (height - 1)
     if jitter_amount > 0.0:
         jitter = (np.random.rand(points.shape[0], 2) - 0.5) * 2.0 * jitter_amount
+        if jitter_style == "stepped":
+            jitter = np.round(jitter)
+        if jitter_axis == "x":
+            jitter[:, 1] = 0.0
+        elif jitter_axis == "y":
+            jitter[:, 0] = 0.0
         points = points + jitter
     pts = points.astype(np.int32)
     energy = float(band_values.mean())
@@ -774,165 +482,13 @@ def _draw_lissajous(
     cv2.polylines(img_bgr, [pts], isClosed=False, color=color, thickness=2, lineType=cv2.LINE_AA)
 
 
-def _apply_bloom(
-    img_bgr: np.ndarray,
-    *,
-    amount: float,
-    radius: float,
-    threshold: float,
-) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    img = img_bgr.astype(np.float32) / 255.0
-    luma = (0.2126 * img[..., 2] + 0.7152 * img[..., 1] + 0.0722 * img[..., 0])
-    mask = np.clip((luma - threshold) / max(1e-6, 1 - threshold), 0, 1)
-    blur = cv2.GaussianBlur(mask, (0, 0), sigmaX=max(0.5, radius))
-    blur = blur[..., None]
-    img = np.clip(img + blur * amount, 0, 1)
-    return (img * 255.0).astype(np.uint8)
-
-
-def _apply_vignette(
-    img_bgr: np.ndarray,
-    *,
-    amount: float,
-    power: float,
-    grid_x: np.ndarray,
-    grid_y: np.ndarray,
-) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    height, width = img_bgr.shape[:2]
-    cx = (width - 1) / 2.0
-    cy = (height - 1) / 2.0
-    nx = (grid_x - cx) / max(1.0, cx)
-    ny = (grid_y - cy) / max(1.0, cy)
-    radius = np.sqrt(nx * nx + ny * ny)
-    falloff = np.clip(1.0 - amount * (radius ** power), 0.0, 1.0)
-    out = img_bgr.astype(np.float32)
-    out *= falloff[..., None]
-    return np.clip(out, 0, 255).astype(np.uint8)
-
-
-def _apply_phosphor_mask(img_bgr: np.ndarray, *, amount: float) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    height, width = img_bgr.shape[:2]
-    x = np.arange(width, dtype=np.int32)
-    stripe = x % 3
-    mask = np.ones((height, width, 3), dtype=np.float32)
-    mask[..., 2] = np.where(stripe == 0, 1.0, 0.6)  # R
-    mask[..., 1] = np.where(stripe == 1, 1.0, 0.6)  # G
-    mask[..., 0] = np.where(stripe == 2, 1.0, 0.6)  # B
-    base = img_bgr.astype(np.float32) / 255.0
-    masked = np.clip(base * mask, 0, 1)
-    out = base * (1.0 - amount) + masked * amount
-    return (out * 255.0).astype(np.uint8)
-
-
-def _apply_chromatic_aberration(
-    img_bgr: np.ndarray,
-    *,
-    shift_x: float,
-    shift_y: float,
-) -> np.ndarray:
-    if abs(shift_x) < 1e-3 and abs(shift_y) < 1e-3:
-        return img_bgr
-    height, width = img_bgr.shape[:2]
-    b, g, r = cv2.split(img_bgr)
-    mat = np.array([[1.0, 0.0, shift_x], [0.0, 1.0, shift_y]], dtype=np.float32)
-    r = cv2.warpAffine(r, mat, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-    mat = np.array([[1.0, 0.0, -shift_x], [0.0, 1.0, -shift_y]], dtype=np.float32)
-    b = cv2.warpAffine(b, mat, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-    return cv2.merge([b, g, r])
-
-
-def _apply_barrel_distortion(
-    img_bgr: np.ndarray,
-    map_x: np.ndarray | None,
-    map_y: np.ndarray | None,
-) -> np.ndarray:
-    if map_x is None or map_y is None:
-        return img_bgr
-    return cv2.remap(img_bgr, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-
-
-def _apply_noise(img_bgr: np.ndarray, *, amount: float) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    scale = amount * 30.0
-    noise = np.random.randn(*img_bgr.shape).astype(np.float32) * scale
-    out = img_bgr.astype(np.float32) + noise
-    return np.clip(out, 0, 255).astype(np.uint8)
-
-
-def _apply_horizontal_jitter(
-    img_bgr: np.ndarray,
-    *,
-    amount: float,
-    speed: float,
-    t: float,
-    grid_x: np.ndarray,
-    grid_y: np.ndarray,
-) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    height, width = img_bgr.shape[:2]
-    freq = 2 * np.pi / max(1.0, height / 6.0)
-    offset = np.sin(grid_y * freq + t * speed * 2 * np.pi) * amount
-    map_x = np.clip(grid_x + offset, 0, width - 1)
-    map_y = grid_y
-    return cv2.remap(img_bgr, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-
-
-def _apply_vertical_roll(
-    img_bgr: np.ndarray,
-    *,
-    amount: float,
-    speed: float,
-    t: float,
-) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    height = img_bgr.shape[0]
-    shift = int((t * speed * amount) % height)
-    if shift == 0:
-        return img_bgr
-    return np.roll(img_bgr, shift, axis=0)
-
-
-def _apply_color_bleed(img_bgr: np.ndarray, *, amount: float) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    k = int(1 + amount * 20)
-    if k % 2 == 0:
-        k += 1
-    ycrcb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YCrCb)
-    y, cr, cb = cv2.split(ycrcb)
-    cr = cv2.GaussianBlur(cr, (k, 1), sigmaX=0)
-    cb = cv2.GaussianBlur(cb, (k, 1), sigmaX=0)
-    merged = cv2.merge([y, cr, cb])
-    return cv2.cvtColor(merged, cv2.COLOR_YCrCb2BGR)
-
-
-def _apply_dither(img_bgr: np.ndarray, *, amount: float) -> np.ndarray:
-    if amount <= 0.0:
-        return img_bgr
-    height, width = img_bgr.shape[:2]
-    tiled = np.tile(_BAYER_8, (height // 8 + 1, width // 8 + 1))[:height, :width]
-    img = img_bgr.astype(np.float32) / 255.0
-    dither = (tiled - 0.5) * amount
-    img = np.clip(img + dither[..., None], 0.0, 1.0)
-    return (img * 255.0).astype(np.uint8)
-
-
 def render_video(
     settings: RenderSettings,
     *,
     progress_cb: Callable[[int, int], None] | None = None,
     cancel_cb: Callable[[], bool] | None = None,
 ) -> None:
-    _ensure_temp_dir(settings.output_path)
+    ensure_temp_dir(settings.output_path)
     gif_frames: List[np.ndarray] | None
     script_generate = None
     text_polylines: list[list[tuple[float, float]]] | None = None
@@ -985,9 +541,9 @@ def render_video(
     total_frames = frame_count(analysis.duration, settings.fps)
     segment_size = max(256, analysis.frame_hop * 2)
 
-    progress_log_path = _init_progress_log(settings.output_path)
+    progress_log_path = init_progress_log(settings.output_path)
 
-    tracker = _ProgressTracker(
+    tracker = ProgressTracker(
         render_total=total_frames,
         progress_cb=progress_cb,
         progress_log_path=progress_log_path,
@@ -1007,7 +563,8 @@ def render_video(
         ny = (grid_y - cy) / max(1.0, cy)
         r2 = nx * nx + ny * ny
         k = float(settings.barrel_amount)
-        factor = 1.0 + k * r2
+        falloff = max(0.35, float(settings.barrel_falloff))
+        factor = 1.0 + k * np.power(r2, falloff)
         map_x = (nx * factor) * cx + cx
         map_y = (ny * factor) * cy + cy
         barrel_map_x = np.clip(map_x, 0, width - 1).astype(np.float32)
@@ -1044,6 +601,7 @@ def render_video(
         sig_hue = _mod_value(band_values, settings.hue_shift_band, osc, settings.osc_mix)
         sig_scan = _mod_value(band_values, settings.scanline_band, osc, settings.osc_mix)
         sig_jitter = _mod_value(band_values, settings.jitter_band, osc, settings.osc_mix)
+        sig_dither = _mod_value(band_values, settings.dither_mod_band, osc, settings.osc_mix)
 
         if script_generate is not None:
             payload = _script_audio_payload(band_values, osc)
@@ -1128,6 +686,8 @@ def render_video(
             glow_strength=glow_strength,
             thickness=thickness,
             glow_radius=settings.glow_radius,
+            glow_threshold=settings.glow_threshold,
+            glow_blend=settings.glow_blend,
         )
 
         if settings.edge_mode == "edge_only":
@@ -1160,6 +720,8 @@ def render_video(
                 enable_glow=settings.enable_glow,
                 decimate_step=max(1, int(settings.decimate_step)),
                 jitter_amount=settings.jitter_amount * sig_jitter,
+                jitter_axis=settings.jitter_axis,
+                jitter_style=settings.jitter_style,
             )
 
         if settings.edge_mode != "edge_only" and settings.enable_lissajous:
@@ -1172,26 +734,41 @@ def render_video(
                 enable_glow=settings.enable_glow,
                 decimate_step=max(1, int(settings.decimate_step)),
                 jitter_amount=settings.jitter_amount * sig_jitter,
+                jitter_axis=settings.jitter_axis,
+                jitter_style=settings.jitter_style,
             )
 
         if settings.scanline_amount > 0.0:
-            phase = i / float(settings.fps)
             amount = settings.scanline_amount * sig_scan
-            freq = 2 * np.pi / max(1.0, height / 6.0)
-            offset = np.sin(grid_y * freq + phase * settings.scanline_speed) * amount
-            map_x = np.clip(grid_x + offset, 0, width - 1)
-            map_y = grid_y
-            img_bgr = cv2.remap(img_bgr, map_x, map_y, interpolation=cv2.INTER_LINEAR)
+            img_bgr = _apply_scanlines(
+                img_bgr,
+                amount=amount,
+                speed=settings.scanline_speed,
+                t=t_sec,
+                thickness=settings.scanline_thickness,
+                spacing=settings.scanline_spacing,
+                style=settings.scanline_style,
+            )
 
         if settings.flicker_amount > 0.0:
-            jitter = (np.random.rand() - 0.5) * 2.0
-            factor = 1.0 + settings.flicker_amount * (0.4 * sig_flicker + 0.2 * jitter)
-            factor = max(0.5, min(1.5, factor))
+            factor = _flicker_factor(
+                t=t_sec,
+                amount=settings.flicker_amount,
+                signal=sig_flicker,
+                speed=settings.flicker_speed,
+                floor=settings.flicker_floor,
+                style=settings.flicker_style,
+            )
             img_bgr = np.clip(img_bgr.astype(np.float32) * factor, 0, 255).astype(np.uint8)
 
-        if settings.trail_strength > 0.0 and previous_frame is not None:
-            trail = max(0.0, min(1.0, settings.trail_strength))
-            img_bgr = cv2.addWeighted(img_bgr, 1 - trail, previous_frame, trail, 0)
+        if settings.trail_strength > 0.0:
+            img_bgr = _apply_trail(
+                img_bgr,
+                previous_frame,
+                strength=settings.trail_strength,
+                decay=settings.trail_decay,
+                blend=settings.trail_blend,
+            )
 
         if settings.bloom_amount > 0.0:
             img_bgr = _apply_bloom(
@@ -1211,10 +788,20 @@ def render_video(
             )
 
         if settings.phosphor_amount > 0.0:
-            img_bgr = _apply_phosphor_mask(img_bgr, amount=settings.phosphor_amount)
+            img_bgr = _apply_phosphor_mask(
+                img_bgr,
+                amount=settings.phosphor_amount,
+                style=settings.phosphor_style,
+                width=settings.phosphor_width,
+            )
 
         if settings.bleed_amount > 0.0:
-            img_bgr = _apply_color_bleed(img_bgr, amount=settings.bleed_amount)
+            img_bgr = _apply_color_bleed_advanced(
+                img_bgr,
+                amount=settings.bleed_amount,
+                radius=settings.bleed_radius,
+                direction=settings.bleed_direction,
+            )
 
         if settings.chroma_shift_x != 0.0 or settings.chroma_shift_y != 0.0:
             img_bgr = _apply_chromatic_aberration(
@@ -1245,10 +832,21 @@ def render_video(
             )
 
         if settings.noise_amount > 0.0:
-            img_bgr = _apply_noise(img_bgr, amount=settings.noise_amount)
+            img_bgr = _apply_noise(
+                img_bgr,
+                amount=settings.noise_amount,
+                mode=settings.noise_mode,
+                grain=settings.noise_grain,
+            )
 
-        if settings.dither_amount > 0.0:
-            img_bgr = _apply_dither(img_bgr, amount=settings.dither_amount)
+        dither_amount = max(0.0, min(1.0, settings.dither_amount + settings.dither_mod_amount * sig_dither))
+        if dither_amount > 0.0:
+            img_bgr = _apply_dither(
+                img_bgr,
+                amount=dither_amount,
+                mode=settings.dither_mode,
+                levels=settings.dither_levels,
+            )
 
         previous_frame = img_bgr.copy()
 
@@ -1261,7 +859,7 @@ def render_video(
         raise RenderCancelled("Render cancelled")
 
     clip = ImageSequenceClip(frames, fps=settings.fps)
-    logger = _MoviepyLogger(tracker)
+    logger = MoviepyLogger(tracker)
     if settings.audio_mode == "osc":
         clip.write_videofile(
             settings.output_path,
@@ -1282,116 +880,3 @@ def render_video(
             logger=logger,
         )
     tracker.finish()
-
-
-class _ProgressTracker:
-    def __init__(
-        self,
-        *,
-        render_total: int,
-        progress_cb: Callable[[int, int], None] | None,
-        progress_log_path: str | None,
-    ) -> None:
-        self.render_total = max(1, int(render_total))
-        self.render_done = 0
-        self.audio_total = 0
-        self.audio_index = 0
-        self.video_total = 0
-        self.video_index = 0
-        self.progress_cb = progress_cb
-        self.progress_log_path = progress_log_path
-        self._last_percent = -1
-        self._last_write = 0.0
-
-    def update_render(self, current: int) -> None:
-        self.render_done = min(self.render_total, int(current))
-        self._emit()
-
-    def update_bar(self, bar: str, attr: str, value: int) -> None:
-        if bar == "chunk":
-            if attr == "total":
-                self.audio_total = int(value)
-            elif attr == "index":
-                self.audio_index = int(value)
-        elif bar == "frame_index":
-            if attr == "total":
-                self.video_total = int(value)
-            elif attr == "index":
-                self.video_index = int(value)
-        self._emit()
-
-    def finish(self) -> None:
-        self._write_progress(100)
-        if self.progress_cb:
-            self.progress_cb(100, 100)
-
-    def _emit(self) -> None:
-        total = self.render_total + self.audio_total + self.video_total
-        if total <= 0:
-            return
-        current = self.render_done + self.audio_index + self.video_index
-        percent = int((current / total) * 100)
-        percent = max(0, min(100, percent))
-        if percent < self._last_percent:
-            percent = self._last_percent
-        if percent != self._last_percent:
-            self._last_percent = percent
-            if self.progress_cb:
-                self.progress_cb(percent, 100)
-            self._write_progress(percent)
-
-    def _write_progress(self, percent: int) -> None:
-        if not self.progress_log_path:
-            return
-        now = time.time()
-        if percent < 100 and (now - self._last_write) < 0.2:
-            return
-        self._last_write = now
-        with open(self.progress_log_path, "a", encoding="utf-8") as log_file:
-            log_file.write(f"progress: {percent}%\n")
-
-
-class _MoviepyLogger(ProgressBarLogger):
-    def __init__(self, tracker: _ProgressTracker) -> None:
-        super().__init__(min_time_interval=0.2)
-        self._tracker = tracker
-
-    def bars_callback(self, bar, attr, value, old_value=None):  # noqa: ANN001
-        self._tracker.update_bar(bar, attr, value)
-
-
-def _init_progress_log(output_path: str) -> str | None:
-    root_dir = os.getcwd()
-    debug_dir = os.path.join(root_dir, "debug")
-    try:
-        os.makedirs(debug_dir, exist_ok=True)
-    except OSError:
-        debug_dir = root_dir
-    primary = os.path.join(debug_dir, "oscimorph_run.log")
-    try:
-        with open(primary, "w", encoding="utf-8") as log_file:
-            log_file.write("Oscimorph render log\n")
-        return primary
-    except OSError:
-        pass
-
-    fallback = os.path.join(debug_dir, f"oscimorph_run_{int(time.time())}.log")
-    try:
-        with open(fallback, "w", encoding="utf-8") as log_file:
-            log_file.write("Oscimorph render log\n")
-        return fallback
-    except OSError:
-        return None
-
-
-def _ensure_temp_dir(output_path: str) -> None:
-    root_dir = os.getcwd()
-    temp_dir = os.path.join(root_dir, "temp")
-    try:
-        os.makedirs(temp_dir, exist_ok=True)
-    except OSError:
-        return
-    os.environ["TMP"] = temp_dir
-    os.environ["TEMP"] = temp_dir
-    os.environ["TMPDIR"] = temp_dir
-    tempfile.tempdir = temp_dir

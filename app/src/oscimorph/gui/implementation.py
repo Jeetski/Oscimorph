@@ -55,11 +55,15 @@ from ..render import (
     _apply_phosphor_mask,
     _apply_chromatic_aberration,
     _apply_barrel_distortion,
+    _apply_color_bleed_advanced,
+    _apply_scanlines,
+    _apply_trail,
     _apply_noise,
     _apply_horizontal_jitter,
     _apply_vertical_roll,
     _apply_color_bleed,
     _apply_dither,
+    _flicker_factor,
 )
 
 
@@ -89,17 +93,33 @@ class PreviewCanvas(QWidget):
         self._preserve_aspect = True
         self._glow_strength = 0.0
         self._glow_radius = 2.0
+        self._glow_threshold = 0.0
+        self._glow_blend = "add"
         self._trail_strength = 0.0
+        self._trail_decay = 1.0
+        self._trail_blend = "mix"
         self._flicker_amount = 0.0
+        self._flicker_style = "random"
+        self._flicker_speed = 1.0
+        self._flicker_floor = 0.75
         self._hue_shift = 0.0
         self._scanline_amount = 0.0
         self._scanline_speed = 1.0
+        self._scanline_thickness = 1
+        self._scanline_spacing = 3
+        self._scanline_style = "dark"
         self._decimate_step = 1
         self._jitter_amount = 0.0
+        self._jitter_axis = "xy"
+        self._jitter_style = "random"
         self._threshold = 0.0
         self._time = 0.0
         self._dither_amount = 0.0
+        self._dither_mode = "bayer"
+        self._dither_levels = 4
         self._phosphor_amount = 0.0
+        self._phosphor_style = "rgb"
+        self._phosphor_width = 3
         self._bloom_amount = 0.0
         self._bloom_radius = 2.0
         self._bloom_threshold = 0.6
@@ -108,12 +128,17 @@ class PreviewCanvas(QWidget):
         self._chroma_shift_x = 0.0
         self._chroma_shift_y = 0.0
         self._barrel_amount = 0.0
+        self._barrel_falloff = 1.0
         self._noise_amount = 0.0
+        self._noise_mode = "rgb"
+        self._noise_grain = 1.0
         self._h_jitter_amount = 0.0
         self._h_jitter_speed = 1.5
         self._v_roll_amount = 0.0
         self._v_roll_speed = 0.25
         self._bleed_amount = 0.0
+        self._bleed_radius = 1.0
+        self._bleed_direction = "horizontal"
         self.setMinimumSize(640, 360)
 
     def set_image(self, image: QImage | None) -> None:
@@ -158,17 +183,33 @@ class PreviewCanvas(QWidget):
         self._preserve_aspect = preserve_aspect
         self._glow_strength = float(glow_strength)
         self._glow_radius = float(shape_params.get("glow_radius", 2.0))
+        self._glow_threshold = float(shape_params.get("glow_threshold", 0.0))
+        self._glow_blend = str(shape_params.get("glow_blend", "add"))
         self._trail_strength = float(shape_params.get("trail_strength", 0.0))
+        self._trail_decay = float(shape_params.get("trail_decay", 1.0))
+        self._trail_blend = str(shape_params.get("trail_blend", "mix"))
         self._flicker_amount = float(shape_params.get("flicker_amount", 0.0))
+        self._flicker_style = str(shape_params.get("flicker_style", "random"))
+        self._flicker_speed = float(shape_params.get("flicker_speed", 1.0))
+        self._flicker_floor = float(shape_params.get("flicker_floor", 0.75))
         self._hue_shift = float(shape_params.get("hue_shift_amount", 0.0))
         self._scanline_amount = float(shape_params.get("scanline_amount", 0.0))
         self._scanline_speed = float(shape_params.get("scanline_speed", 1.0))
+        self._scanline_thickness = max(1, int(shape_params.get("scanline_thickness", 1)))
+        self._scanline_spacing = max(2, int(shape_params.get("scanline_spacing", 3)))
+        self._scanline_style = str(shape_params.get("scanline_style", "dark"))
         self._decimate_step = max(1, int(shape_params.get("decimate_step", 1)))
         self._jitter_amount = float(shape_params.get("jitter_amount", 0.0))
+        self._jitter_axis = str(shape_params.get("jitter_axis", "xy"))
+        self._jitter_style = str(shape_params.get("jitter_style", "random"))
         self._threshold = float(shape_params.get("threshold", 0.0))
         self._time = float(shape_params.get("time", 0.0))
         self._dither_amount = float(shape_params.get("dither_amount", 0.0))
+        self._dither_mode = str(shape_params.get("dither_mode", "bayer"))
+        self._dither_levels = max(2, int(shape_params.get("dither_levels", 4)))
         self._phosphor_amount = float(shape_params.get("phosphor_amount", 0.0))
+        self._phosphor_style = str(shape_params.get("phosphor_style", "rgb"))
+        self._phosphor_width = max(1, int(shape_params.get("phosphor_width", 3)))
         self._bloom_amount = float(shape_params.get("bloom_amount", 0.0))
         self._bloom_radius = float(shape_params.get("bloom_radius", 2.0))
         self._bloom_threshold = float(shape_params.get("bloom_threshold", 0.6))
@@ -177,12 +218,17 @@ class PreviewCanvas(QWidget):
         self._chroma_shift_x = float(shape_params.get("chroma_shift_x", 0.0))
         self._chroma_shift_y = float(shape_params.get("chroma_shift_y", 0.0))
         self._barrel_amount = float(shape_params.get("barrel_amount", 0.0))
+        self._barrel_falloff = float(shape_params.get("barrel_falloff", 1.0))
         self._noise_amount = float(shape_params.get("noise_amount", 0.0))
+        self._noise_mode = str(shape_params.get("noise_mode", "rgb"))
+        self._noise_grain = float(shape_params.get("noise_grain", 1.0))
         self._h_jitter_amount = float(shape_params.get("h_jitter_amount", 0.0))
         self._h_jitter_speed = float(shape_params.get("h_jitter_speed", 1.5))
         self._v_roll_amount = float(shape_params.get("v_roll_amount", 0.0))
         self._v_roll_speed = float(shape_params.get("v_roll_speed", 0.25))
         self._bleed_amount = float(shape_params.get("bleed_amount", 0.0))
+        self._bleed_radius = float(shape_params.get("bleed_radius", 1.0))
+        self._bleed_direction = str(shape_params.get("bleed_direction", "horizontal"))
         self._shape_points = self._build_shape_points()
         self._image = self._render_image()
         self.update()
@@ -228,8 +274,15 @@ class PreviewCanvas(QWidget):
             if step > 1 and (i % step) != 0:
                 continue
             if self._jitter_amount > 0.0:
-                x += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
-                y += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                jx = (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                jy = (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                if self._jitter_style == "stepped":
+                    jx = round(jx)
+                    jy = round(jy)
+                if self._jitter_axis in {"xy", "x"}:
+                    x += jx
+                if self._jitter_axis in {"xy", "y"}:
+                    y += jy
             angle = np.arctan2(y, x)
             radius = np.sqrt(x * x + y * y)
             radius *= 1.0 + warp * np.sin(angle * 3.0 + self._warp_phase)
@@ -290,8 +343,15 @@ class PreviewCanvas(QWidget):
                 if step > 1 and (i % step) != 0:
                     continue
                 if self._jitter_amount > 0.0:
-                    x += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
-                    y += (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                    jx = (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                    jy = (np.random.rand() - 0.5) * 2.0 * self._jitter_amount
+                    if self._jitter_style == "stepped":
+                        jx = round(jx)
+                        jy = round(jy)
+                    if self._jitter_axis in {"xy", "x"}:
+                        x += jx
+                    if self._jitter_axis in {"xy", "y"}:
+                        y += jy
                 if warp > 0.0:
                     angle = np.arctan2(y, x)
                     radius = np.sqrt(x * x + y * y)
@@ -445,11 +505,6 @@ class PreviewCanvas(QWidget):
         for y in range(0, image.height(), step):
             painter.drawLine(0, y, image.width(), y)
 
-        if self._trail_strength > 0.0 and self._last_image is not None:
-            painter.setOpacity(max(0.0, min(1.0, self._trail_strength)))
-            painter.drawImage(0, 0, self._last_image)
-            painter.setOpacity(1.0)
-
         if self._polylines:
             self._draw_polylines(painter)
         elif self._shape_points:
@@ -458,26 +513,19 @@ class PreviewCanvas(QWidget):
             painter.setPen(QColor(140, 150, 150))
             painter.drawText(image.rect(), Qt.AlignCenter, "No preview")
 
-        if self._scanline_amount > 0.0:
-            painter.setPen(Qt.NoPen)
-            amount = max(0.0, min(1.0, self._scanline_amount / 5.0))
-            phase = self._time * self._scanline_speed * 6.0
-            for y in range(0, image.height(), 3):
-                wave = 0.5 + 0.5 * np.sin(y * 0.12 + phase)
-                alpha = int(140 * amount * wave)
-                if alpha <= 0:
-                    continue
-                painter.setBrush(QColor(0, 0, 0, alpha))
-                painter.drawRect(0, y, image.width(), 1)
-
         if self._flicker_amount > 0.0:
-            jitter = (np.random.rand() - 0.5) * 2.0
-            factor = 1.0 + self._flicker_amount * (0.25 + 0.15 * jitter)
-            factor = max(0.7, min(1.25, factor))
+            factor = _flicker_factor(
+                t=self._time,
+                amount=self._flicker_amount,
+                signal=1.0,
+                speed=self._flicker_speed,
+                floor=self._flicker_floor,
+                style=self._flicker_style,
+            )
             painter.save()
             painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
             delta = abs(factor - 1.0)
-            alpha = int(min(1.0, delta / 0.3) * 120)
+            alpha = int(min(1.0, delta / 0.6) * 160)
             if factor >= 1.0:
                 overlay = QColor(255, 255, 255, alpha)
             else:
@@ -488,6 +536,8 @@ class PreviewCanvas(QWidget):
         painter.end()
         preview = image
         if (
+            self._trail_strength > 0.0
+            or
             self._dither_amount > 0.0
             or self._phosphor_amount > 0.0
             or self._bloom_amount > 0.0
@@ -499,6 +549,7 @@ class PreviewCanvas(QWidget):
             or self._h_jitter_amount > 0.0
             or self._v_roll_amount > 0.0
             or self._bleed_amount > 0.0
+            or self._scanline_amount > 0.0
         ):
             rgb = preview.convertToFormat(QImage.Format_RGB888)
             width = rgb.width()
@@ -507,11 +558,27 @@ class PreviewCanvas(QWidget):
             buf.setsize(rgb.sizeInBytes())
             frame_rgb = np.frombuffer(buf, dtype=np.uint8).reshape((height, width, 3)).copy()
             frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+            previous_bgr = None
+            if self._trail_strength > 0.0 and self._last_image is not None:
+                prev_rgb = self._last_image.convertToFormat(QImage.Format_RGB888)
+                prev_buf = prev_rgb.bits()
+                prev_buf.setsize(prev_rgb.sizeInBytes())
+                prev_frame = np.frombuffer(prev_buf, dtype=np.uint8).reshape((prev_rgb.height(), prev_rgb.width(), 3)).copy()
+                if prev_rgb.width() != width or prev_rgb.height() != height:
+                    prev_frame = cv2.resize(prev_frame, (width, height), interpolation=cv2.INTER_LINEAR)
+                previous_bgr = cv2.cvtColor(prev_frame, cv2.COLOR_RGB2BGR)
 
             grid_x, grid_y = np.meshgrid(np.arange(width), np.arange(height))
             grid_x = grid_x.astype(np.float32)
             grid_y = grid_y.astype(np.float32)
 
+            frame_bgr = _apply_trail(
+                frame_bgr,
+                previous_bgr,
+                strength=self._trail_strength,
+                decay=self._trail_decay,
+                blend=self._trail_blend,
+            )
             frame_bgr = _apply_bloom(
                 frame_bgr,
                 amount=self._bloom_amount,
@@ -525,8 +592,18 @@ class PreviewCanvas(QWidget):
                 grid_x=grid_x,
                 grid_y=grid_y,
             )
-            frame_bgr = _apply_phosphor_mask(frame_bgr, amount=self._phosphor_amount)
-            frame_bgr = _apply_color_bleed(frame_bgr, amount=self._bleed_amount)
+            frame_bgr = _apply_phosphor_mask(
+                frame_bgr,
+                amount=self._phosphor_amount,
+                style=self._phosphor_style,
+                width=self._phosphor_width,
+            )
+            frame_bgr = _apply_color_bleed_advanced(
+                frame_bgr,
+                amount=self._bleed_amount,
+                radius=self._bleed_radius,
+                direction=self._bleed_direction,
+            )
             frame_bgr = _apply_chromatic_aberration(
                 frame_bgr,
                 shift_x=self._chroma_shift_x,
@@ -538,12 +615,21 @@ class PreviewCanvas(QWidget):
                 nx = (grid_x - cx) / max(1.0, cx)
                 ny = (grid_y - cy) / max(1.0, cy)
                 r2 = nx * nx + ny * ny
-                factor = 1.0 + float(self._barrel_amount) * r2
+                factor = 1.0 + float(self._barrel_amount) * np.power(r2, max(0.35, self._barrel_falloff))
                 map_x = (nx * factor) * cx + cx
                 map_y = (ny * factor) * cy + cy
                 map_x = np.clip(map_x, 0, width - 1).astype(np.float32)
                 map_y = np.clip(map_y, 0, height - 1).astype(np.float32)
                 frame_bgr = _apply_barrel_distortion(frame_bgr, map_x, map_y)
+            frame_bgr = _apply_scanlines(
+                frame_bgr,
+                amount=self._scanline_amount,
+                speed=self._scanline_speed,
+                t=self._time,
+                thickness=self._scanline_thickness,
+                spacing=self._scanline_spacing,
+                style=self._scanline_style,
+            )
             frame_bgr = _apply_horizontal_jitter(
                 frame_bgr,
                 amount=self._h_jitter_amount,
@@ -558,8 +644,18 @@ class PreviewCanvas(QWidget):
                 speed=self._v_roll_speed,
                 t=self._time,
             )
-            frame_bgr = _apply_noise(frame_bgr, amount=self._noise_amount)
-            frame_bgr = _apply_dither(frame_bgr, amount=self._dither_amount)
+            frame_bgr = _apply_noise(
+                frame_bgr,
+                amount=self._noise_amount,
+                mode=self._noise_mode,
+                grain=self._noise_grain,
+            )
+            frame_bgr = _apply_dither(
+                frame_bgr,
+                amount=self._dither_amount,
+                mode=self._dither_mode,
+                levels=self._dither_levels,
+            )
 
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             preview = QImage(frame_rgb.data, width, height, frame_rgb.strides[0], QImage.Format_RGB888).copy()
@@ -799,7 +895,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-        self.setWindowTitle("Oscimorph")
+        self.setWindowTitle("Oscimorph alpha v0.1")
         self._set_branding()
         self._apply_theme()
 
@@ -840,8 +936,9 @@ class MainWindow(QMainWindow):
         self._update_visibility()
         self._update_preview_labels(self.loop_in_ms, self.loop_out_ms)
         self._update_preview_frame()
-        QTimer.singleShot(0, self._show_startup_dialog)
-        QTimer.singleShot(0, self._play_startup_sound)
+        if os.environ.get("OSCIMORPH_SKIP_STARTUP", "").lower() not in {"1", "true", "yes", "on"}:
+            QTimer.singleShot(0, self._show_startup_dialog)
+            QTimer.singleShot(0, self._play_startup_sound)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet(
@@ -1078,7 +1175,7 @@ class MainWindow(QMainWindow):
         content = QVBoxLayout()
         content.setSpacing(8)
 
-        title = QLabel("OSCIMORPH v1.0")
+        title = QLabel("OSCIMORPH alpha v0.1")
         title.setStyleSheet("font-size: 34px; font-weight: 700;")
         content.addWidget(title)
 
@@ -1121,7 +1218,7 @@ class MainWindow(QMainWindow):
 
     def _open_changelog_window(self, _link: str) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Oscimorph Changelog")
+        dialog.setWindowTitle("Oscimorph alpha v0.1 Changelog")
         dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         dialog.resize(900, 650)
 
@@ -1437,26 +1534,26 @@ class MainWindow(QMainWindow):
         self.effect_groups = {
             "displace": ["mod_displace_x_amount", "mod_displace_y_amount"],
             "thickness": ["mod_thickness_amount"],
-            "glow": ["mod_glow_amount", "glow_radius"],
+            "glow": ["mod_glow_amount", "glow_radius", "glow_threshold", "glow_blend"],
             "threshold": ["mod_threshold_amount"],
             "warp": ["mod_warp_amount", "mod_warp_speed_amount"],
             "rotation": ["mod_rotation_amount"],
-            "trail": ["trail_strength"],
-            "flicker": ["flicker_amount"],
+            "trail": ["trail_strength", "trail_decay", "trail_blend"],
+            "flicker": ["flicker_amount", "flicker_style", "flicker_speed", "flicker_floor"],
             "hue": ["hue_shift_amount"],
-            "scanline": ["scanline_amount"],
+            "scanline": ["scanline_amount", "scanline_thickness", "scanline_spacing", "scanline_style"],
             "decimate": ["decimate_step"],
-            "jitter": ["jitter_amount"],
-            "dither": ["dither_amount"],
-            "phosphor": ["phosphor_amount"],
+            "jitter": ["jitter_amount", "jitter_axis", "jitter_style"],
+            "dither": ["dither_amount", "dither_mod_amount", "dither_mode", "dither_levels"],
+            "phosphor": ["phosphor_amount", "phosphor_style", "phosphor_width"],
             "bloom": ["bloom_amount", "bloom_radius", "bloom_threshold"],
             "vignette": ["vignette_amount", "vignette_power"],
             "chromatic": ["chroma_shift_x", "chroma_shift_y"],
-            "barrel": ["barrel_amount"],
-            "noise": ["noise_amount"],
+            "barrel": ["barrel_amount", "barrel_falloff"],
+            "noise": ["noise_amount", "noise_mode", "noise_grain"],
             "h_jitter": ["h_jitter_amount", "h_jitter_speed"],
             "v_roll": ["v_roll_amount", "v_roll_speed"],
-            "bleed": ["bleed_amount"],
+            "bleed": ["bleed_amount", "bleed_radius", "bleed_direction"],
         }
 
         self.default_effects = {
@@ -1650,22 +1747,22 @@ class MainWindow(QMainWindow):
         )
         self._register_effect("warp", "Warp", self._build_warp_effect())
         self._register_effect("rotation", "Rotation", self._build_rotation_effect())
-        self._register_effect("trail", "Trails", self._build_single_slider("trail_strength", 0.0, 0.9, 0.12))
-        self._register_effect("flicker", "Flicker", self._build_band_effect("flicker_amount", 0.0, 1.0, 0.08, "all"))
+        self._register_effect("trail", "Trails", self._build_trail_effect())
+        self._register_effect("flicker", "Flicker", self._build_flicker_effect())
         self._register_effect("hue", "Hue Shift", self._build_band_effect("hue_shift_amount", 0.0, 180.0, 6.0, "all"))
         self._register_effect("scanline", "Scanline", self._build_scanline_effect(default_amount=0.6, default_band="all"))
         self._register_effect("decimate", "Decimate", self._build_decimate_effect(default_step=1))
-        self._register_effect("jitter", "Jitter", self._build_band_effect("jitter_amount", 0.0, 5.0, 0.25, "all"))
-        self._register_effect("dither", "Dither", self._build_single_slider("dither_amount", 0.0, 1.0, 0.2))
-        self._register_effect("phosphor", "Phosphor Mask", self._build_single_slider("phosphor_amount", 0.0, 1.0, 0.35))
+        self._register_effect("jitter", "Jitter", self._build_jitter_effect())
+        self._register_effect("dither", "Dither", self._build_dither_effect())
+        self._register_effect("phosphor", "Phosphor Mask", self._build_phosphor_effect())
         self._register_effect("bloom", "Bloom", self._build_bloom_effect())
         self._register_effect("vignette", "Vignette", self._build_vignette_effect())
         self._register_effect("chromatic", "Chromatic Aberration", self._build_chromatic_effect())
         self._register_effect("barrel", "Barrel Distortion", self._build_barrel_effect())
-        self._register_effect("noise", "Noise", self._build_single_slider("noise_amount", 0.0, 1.0, 0.15))
+        self._register_effect("noise", "Noise", self._build_noise_effect())
         self._register_effect("h_jitter", "Horizontal Jitter", self._build_h_jitter_effect())
         self._register_effect("v_roll", "Vertical Roll", self._build_v_roll_effect())
-        self._register_effect("bleed", "Color Bleed", self._build_single_slider("bleed_amount", 0.0, 1.0, 0.25))
+        self._register_effect("bleed", "Color Bleed", self._build_bleed_effect())
 
         for key in self.default_effects:
             self._activate_effect(key)
@@ -1713,6 +1810,16 @@ class MainWindow(QMainWindow):
         form.addRow("Mod", row_mod)
         glow_radius = self._single_spin("glow_radius", 0.5, 8.0, 2.6)
         form.addRow("Radius", glow_radius)
+        glow_threshold = self._single_spin("glow_threshold", 0.0, 1.0, 0.0)
+        form.addRow("Threshold", glow_threshold)
+        blend = QComboBox()
+        blend.addItem("Add", "add")
+        blend.addItem("Screen", "screen")
+        blend.addItem("Soft", "soft")
+        self._set_default(blend, "add")
+        form.addRow("Blend", blend)
+        self.effect_controls["glow_blend"] = {"blend": blend}
+        blend.currentIndexChanged.connect(self._update_preview_frame)
         return widget
 
     def _build_warp_effect(self) -> QWidget:
@@ -1798,10 +1905,31 @@ class MainWindow(QMainWindow):
         speed.setSingleStep(0.1)
         speed.setValue(1.0)
         self._set_default(speed, 1.0)
+        thickness = QSpinBox()
+        thickness.setRange(1, 8)
+        thickness.setValue(1)
+        self._set_default(thickness, 1)
+        spacing = QSpinBox()
+        spacing.setRange(2, 16)
+        spacing.setValue(3)
+        self._set_default(spacing, 3)
+        style = QComboBox()
+        style.addItem("Dark", "dark")
+        style.addItem("Light", "light")
+        self._set_default(style, "dark")
         form.addRow("Amount", row)
         form.addRow("Speed", speed)
+        form.addRow("Thickness", thickness)
+        form.addRow("Spacing", spacing)
+        form.addRow("Style", style)
         self.effect_controls["scanline_amount"]["speed"] = speed
+        self.effect_controls["scanline_thickness"] = {"step": thickness}
+        self.effect_controls["scanline_spacing"] = {"step": spacing}
+        self.effect_controls["scanline_style"] = {"style": style}
         speed.valueChanged.connect(self._update_preview_frame)
+        thickness.valueChanged.connect(self._update_preview_frame)
+        spacing.valueChanged.connect(self._update_preview_frame)
+        style.currentIndexChanged.connect(self._update_preview_frame)
         return widget
 
     def _build_decimate_effect(self, *, default_step: int) -> QWidget:
@@ -1823,9 +1951,213 @@ class MainWindow(QMainWindow):
         spin.setRange(low, high)
         spin.setSingleStep(0.05)
         spin.setValue(value)
+        self._set_default(spin, value)
         form.addRow("Amount", spin)
         self.effect_controls[key] = {"amount": spin}
         spin.valueChanged.connect(self._update_preview_frame)
+        return widget
+
+    def _build_dither_effect(self) -> QWidget:
+        widget = QWidget()
+        form = QFormLayout(widget)
+        amount = QDoubleSpinBox()
+        amount.setRange(0.0, 1.0)
+        amount.setSingleStep(0.05)
+        amount.setValue(0.2)
+        self._set_default(amount, 0.2)
+
+        mode = QComboBox()
+        mode.addItem("Bayer 8x8", "bayer")
+        mode.addItem("Ordered 4x4", "ordered")
+        mode.addItem("Diffusion", "diffusion")
+        self._set_default(mode, "bayer")
+
+        levels = QSpinBox()
+        levels.setRange(2, 32)
+        levels.setValue(4)
+        self._set_default(levels, 4)
+
+        mod_row = self._amount_band_row("dither_mod_amount", 0.0, 1.0, 0.0, "all")
+
+        form.addRow("Amount", amount)
+        form.addRow("Mode", mode)
+        form.addRow("Palette Levels", levels)
+        form.addRow("Audio Mod", mod_row)
+
+        self.effect_controls["dither_amount"] = {"amount": amount}
+        self.effect_controls["dither_mode"] = {"mode": mode}
+        self.effect_controls["dither_levels"] = {"step": levels}
+
+        amount.valueChanged.connect(self._update_preview_frame)
+        mode.currentIndexChanged.connect(self._update_preview_frame)
+        levels.valueChanged.connect(self._update_preview_frame)
+        return widget
+
+    def _build_trail_effect(self) -> QWidget:
+        widget = QWidget()
+        form = QFormLayout(widget)
+        amount = QDoubleSpinBox()
+        amount.setRange(0.0, 0.95)
+        amount.setSingleStep(0.05)
+        amount.setValue(0.12)
+        self._set_default(amount, 0.12)
+        decay = QDoubleSpinBox()
+        decay.setRange(0.0, 1.0)
+        decay.setSingleStep(0.05)
+        decay.setValue(1.0)
+        self._set_default(decay, 1.0)
+        blend = QComboBox()
+        blend.addItem("Mix", "mix")
+        blend.addItem("Add", "add")
+        blend.addItem("Lighten", "lighten")
+        self._set_default(blend, "mix")
+        form.addRow("Amount", amount)
+        form.addRow("Decay", decay)
+        form.addRow("Blend", blend)
+        self.effect_controls["trail_strength"] = {"amount": amount}
+        self.effect_controls["trail_decay"] = {"amount": decay}
+        self.effect_controls["trail_blend"] = {"blend": blend}
+        amount.valueChanged.connect(self._update_preview_frame)
+        decay.valueChanged.connect(self._update_preview_frame)
+        blend.currentIndexChanged.connect(self._update_preview_frame)
+        return widget
+
+    def _build_flicker_effect(self) -> QWidget:
+        widget = QWidget()
+        form = QFormLayout(widget)
+        row = self._amount_band_row("flicker_amount", 0.0, 1.0, 0.08, "all")
+        style = QComboBox()
+        style.addItem("Random", "random")
+        style.addItem("Sine", "sine")
+        style.addItem("Square", "square")
+        self._set_default(style, "random")
+        speed = QDoubleSpinBox()
+        speed.setRange(0.1, 10.0)
+        speed.setSingleStep(0.1)
+        speed.setValue(1.0)
+        self._set_default(speed, 1.0)
+        floor = QDoubleSpinBox()
+        floor.setRange(0.2, 1.2)
+        floor.setSingleStep(0.05)
+        floor.setValue(0.75)
+        self._set_default(floor, 0.75)
+        form.addRow("Amount", row)
+        form.addRow("Style", style)
+        form.addRow("Speed", speed)
+        form.addRow("Floor", floor)
+        self.effect_controls["flicker_style"] = {"style": style}
+        self.effect_controls["flicker_speed"] = {"amount": speed}
+        self.effect_controls["flicker_floor"] = {"amount": floor}
+        style.currentIndexChanged.connect(self._update_preview_frame)
+        speed.valueChanged.connect(self._update_preview_frame)
+        floor.valueChanged.connect(self._update_preview_frame)
+        return widget
+
+    def _build_jitter_effect(self) -> QWidget:
+        widget = QWidget()
+        form = QFormLayout(widget)
+        row = self._amount_band_row("jitter_amount", 0.0, 5.0, 0.25, "all")
+        axis = QComboBox()
+        axis.addItem("XY", "xy")
+        axis.addItem("X Only", "x")
+        axis.addItem("Y Only", "y")
+        self._set_default(axis, "xy")
+        style = QComboBox()
+        style.addItem("Random", "random")
+        style.addItem("Stepped", "stepped")
+        self._set_default(style, "random")
+        form.addRow("Amount", row)
+        form.addRow("Axis", axis)
+        form.addRow("Style", style)
+        self.effect_controls["jitter_axis"] = {"axis": axis}
+        self.effect_controls["jitter_style"] = {"style": style}
+        axis.currentIndexChanged.connect(self._update_preview_frame)
+        style.currentIndexChanged.connect(self._update_preview_frame)
+        return widget
+
+    def _build_bleed_effect(self) -> QWidget:
+        widget = QWidget()
+        form = QFormLayout(widget)
+        amount = QDoubleSpinBox()
+        amount.setRange(0.0, 1.0)
+        amount.setSingleStep(0.05)
+        amount.setValue(0.25)
+        self._set_default(amount, 0.25)
+        radius = QDoubleSpinBox()
+        radius.setRange(0.1, 3.0)
+        radius.setSingleStep(0.1)
+        radius.setValue(1.0)
+        self._set_default(radius, 1.0)
+        direction = QComboBox()
+        direction.addItem("Horizontal", "horizontal")
+        direction.addItem("Vertical", "vertical")
+        direction.addItem("Both", "both")
+        self._set_default(direction, "horizontal")
+        form.addRow("Amount", amount)
+        form.addRow("Radius", radius)
+        form.addRow("Direction", direction)
+        self.effect_controls["bleed_amount"] = {"amount": amount}
+        self.effect_controls["bleed_radius"] = {"amount": radius}
+        self.effect_controls["bleed_direction"] = {"direction": direction}
+        amount.valueChanged.connect(self._update_preview_frame)
+        radius.valueChanged.connect(self._update_preview_frame)
+        direction.currentIndexChanged.connect(self._update_preview_frame)
+        return widget
+
+    def _build_noise_effect(self) -> QWidget:
+        widget = QWidget()
+        form = QFormLayout(widget)
+        amount = QDoubleSpinBox()
+        amount.setRange(0.0, 1.0)
+        amount.setSingleStep(0.05)
+        amount.setValue(0.15)
+        self._set_default(amount, 0.15)
+        mode = QComboBox()
+        mode.addItem("RGB", "rgb")
+        mode.addItem("Monochrome", "mono")
+        self._set_default(mode, "rgb")
+        grain = QDoubleSpinBox()
+        grain.setRange(1.0, 8.0)
+        grain.setSingleStep(0.25)
+        grain.setValue(1.0)
+        self._set_default(grain, 1.0)
+        form.addRow("Amount", amount)
+        form.addRow("Mode", mode)
+        form.addRow("Grain", grain)
+        self.effect_controls["noise_amount"] = {"amount": amount}
+        self.effect_controls["noise_mode"] = {"mode": mode}
+        self.effect_controls["noise_grain"] = {"amount": grain}
+        amount.valueChanged.connect(self._update_preview_frame)
+        mode.currentIndexChanged.connect(self._update_preview_frame)
+        grain.valueChanged.connect(self._update_preview_frame)
+        return widget
+
+    def _build_phosphor_effect(self) -> QWidget:
+        widget = QWidget()
+        form = QFormLayout(widget)
+        amount = QDoubleSpinBox()
+        amount.setRange(0.0, 1.0)
+        amount.setSingleStep(0.05)
+        amount.setValue(0.35)
+        self._set_default(amount, 0.35)
+        style = QComboBox()
+        style.addItem("RGB Triad", "rgb")
+        style.addItem("Grille", "grille")
+        style.addItem("Slot Mask", "slot")
+        self._set_default(style, "rgb")
+        width = QSpinBox()
+        width.setRange(1, 8)
+        width.setValue(3)
+        self._set_default(width, 3)
+        form.addRow("Amount", amount)
+        form.addRow("Mask Style", style)
+        form.addRow("Stripe Width", width)
+        self.effect_controls["phosphor_amount"] = {"amount": amount}
+        self.effect_controls["phosphor_style"] = {"style": style}
+        self.effect_controls["phosphor_width"] = {"step": width}
+        amount.valueChanged.connect(self._update_preview_frame)
+        style.currentIndexChanged.connect(self._update_preview_frame)
+        width.valueChanged.connect(self._update_preview_frame)
         return widget
 
     def _build_bloom_effect(self) -> QWidget:
@@ -1907,9 +2239,17 @@ class MainWindow(QMainWindow):
         amount.setSingleStep(0.02)
         amount.setValue(0.12)
         self._set_default(amount, 0.12)
+        falloff = QDoubleSpinBox()
+        falloff.setRange(0.35, 3.0)
+        falloff.setSingleStep(0.05)
+        falloff.setValue(1.0)
+        self._set_default(falloff, 1.0)
         form.addRow("Amount", amount)
+        form.addRow("Falloff", falloff)
         self.effect_controls["barrel_amount"] = {"amount": amount}
+        self.effect_controls["barrel_falloff"] = {"amount": falloff}
         amount.valueChanged.connect(self._update_preview_frame)
+        falloff.valueChanged.connect(self._update_preview_frame)
         return widget
 
     def _build_h_jitter_effect(self) -> QWidget:
@@ -2276,7 +2616,7 @@ class MainWindow(QMainWindow):
             self.script_generate = None
             return
         try:
-            from ..render.core import _load_script
+            from ..render.text import _load_script
 
             self.script_generate = _load_script(path)
         except Exception as exc:  # noqa: BLE001
@@ -2470,6 +2810,7 @@ class MainWindow(QMainWindow):
         sig_hue = _mod_value(bands, settings.hue_shift_band, osc, settings.osc_mix)
         sig_scan = _mod_value(bands, settings.scanline_band, osc, settings.osc_mix)
         sig_jitter = _mod_value(bands, settings.jitter_band, osc, settings.osc_mix)
+        sig_dither = _mod_value(bands, settings.dither_mod_band, osc, settings.osc_mix)
 
         energy = float(bands.mean()) if bands.size else 0.0
         hue_shift = settings.hue_shift_amount * sig_hue
@@ -2508,6 +2849,7 @@ class MainWindow(QMainWindow):
             if "threshold" in self.active_effects
             else 0.0
         )
+        dither_amount = max(0.0, min(1.0, settings.dither_amount + settings.dither_mod_amount * sig_dither))
         shape_params = {
             "star_points": settings.star_points,
             "star_inner": settings.star_inner,
@@ -2524,18 +2866,34 @@ class MainWindow(QMainWindow):
             "superellipse_n": settings.superellipse_n,
             "superellipse_scale": settings.superellipse_scale,
             "glow_radius": settings.glow_radius,
+            "glow_threshold": settings.glow_threshold,
+            "glow_blend": settings.glow_blend,
             "trail_strength": settings.trail_strength,
+            "trail_decay": settings.trail_decay,
+            "trail_blend": settings.trail_blend,
             "flicker_amount": settings.flicker_amount * sig_flicker,
+            "flicker_style": settings.flicker_style,
+            "flicker_speed": settings.flicker_speed,
+            "flicker_floor": settings.flicker_floor,
             "hue_shift_amount": settings.hue_shift_amount * sig_hue,
             "scanline_amount": settings.scanline_amount * sig_scan,
             "scanline_speed": settings.scanline_speed,
+            "scanline_thickness": settings.scanline_thickness,
+            "scanline_spacing": settings.scanline_spacing,
+            "scanline_style": settings.scanline_style,
             "decimate_step": settings.decimate_step,
             "jitter_amount": settings.jitter_amount * sig_jitter,
+            "jitter_axis": settings.jitter_axis,
+            "jitter_style": settings.jitter_style,
             "threshold": threshold_value,
             "time": self.preview_time,
             "poly_rotation": base_rotation,
-            "dither_amount": settings.dither_amount,
+            "dither_amount": dither_amount,
+            "dither_mode": settings.dither_mode,
+            "dither_levels": settings.dither_levels,
             "phosphor_amount": settings.phosphor_amount,
+            "phosphor_style": settings.phosphor_style,
+            "phosphor_width": settings.phosphor_width,
             "bloom_amount": settings.bloom_amount,
             "bloom_radius": settings.bloom_radius,
             "bloom_threshold": settings.bloom_threshold,
@@ -2544,12 +2902,17 @@ class MainWindow(QMainWindow):
             "chroma_shift_x": settings.chroma_shift_x,
             "chroma_shift_y": settings.chroma_shift_y,
             "barrel_amount": settings.barrel_amount,
+            "barrel_falloff": settings.barrel_falloff,
             "noise_amount": settings.noise_amount,
+            "noise_mode": settings.noise_mode,
+            "noise_grain": settings.noise_grain,
             "h_jitter_amount": settings.h_jitter_amount,
             "h_jitter_speed": settings.h_jitter_speed,
             "v_roll_amount": settings.v_roll_amount,
             "v_roll_speed": settings.v_roll_speed,
             "bleed_amount": settings.bleed_amount,
+            "bleed_radius": settings.bleed_radius,
+            "bleed_direction": settings.bleed_direction,
         }
 
         displace_x = settings.mod_displace_x_amount * sig_displace_x
@@ -2643,17 +3006,29 @@ class MainWindow(QMainWindow):
             mod_rotation_direction=self._effect_direction("mod_rotation_amount"),
             script_path=self.script_path.text().strip(),
             trail_strength=self._effect_amount("trail_strength", "trail"),
-            glow_radius=self._effect_amount("glow_radius", "glow_radius"),
+            trail_decay=self._effect_amount("trail_decay", "trail"),
+            trail_blend=self._effect_choice("trail_blend", "blend", default="mix"),
+            glow_radius=self._effect_amount("glow_radius", "glow"),
+            glow_threshold=self._effect_amount("glow_threshold", "glow"),
+            glow_blend=self._effect_choice("glow_blend", "blend", default="add"),
             flicker_amount=self._effect_amount("flicker_amount", "flicker"),
             flicker_band=self._effect_band("flicker_amount", "flicker"),
+            flicker_style=self._effect_choice("flicker_style", "style", default="random"),
+            flicker_speed=self._effect_amount("flicker_speed", "flicker"),
+            flicker_floor=self._effect_amount("flicker_floor", "flicker"),
             hue_shift_amount=self._effect_amount("hue_shift_amount", "hue"),
             hue_shift_band=self._effect_band("hue_shift_amount", "hue"),
             scanline_amount=self._effect_amount("scanline_amount", "scanline"),
             scanline_band=self._effect_band("scanline_amount", "scanline"),
             scanline_speed=self._effect_speed("scanline_amount"),
+            scanline_thickness=self._effect_step("scanline_thickness"),
+            scanline_spacing=self._effect_step("scanline_spacing"),
+            scanline_style=self._effect_choice("scanline_style", "style", default="dark"),
             decimate_step=self._effect_step("decimate_step"),
             jitter_amount=self._effect_amount("jitter_amount", "jitter"),
             jitter_band=self._effect_band("jitter_amount", "jitter"),
+            jitter_axis=self._effect_choice("jitter_axis", "axis", default="xy"),
+            jitter_style=self._effect_choice("jitter_style", "style", default="random"),
             osc_waveform=self.osc_waveform.currentData(),
             osc_frequency=float(self.osc_frequency.value()),
             osc_depth=float(self.osc_depth.value()),
@@ -2662,7 +3037,13 @@ class MainWindow(QMainWindow):
             text_scale=float(self.text_scale.value()),
             text_font_family=self.text_font_family,
             dither_amount=self._effect_amount("dither_amount", "dither"),
+            dither_mod_amount=self._effect_amount("dither_mod_amount", "dither"),
+            dither_mod_band=self._effect_band("dither_mod_amount", "dither"),
+            dither_mode=self._effect_choice("dither_mode", "mode", default="bayer"),
+            dither_levels=self._effect_step("dither_levels"),
             phosphor_amount=self._effect_amount("phosphor_amount", "phosphor"),
+            phosphor_style=self._effect_choice("phosphor_style", "style", default="rgb"),
+            phosphor_width=self._effect_step("phosphor_width"),
             bloom_amount=self._effect_amount("bloom_amount", "bloom"),
             bloom_radius=self._effect_amount("bloom_radius", "bloom"),
             bloom_threshold=self._effect_amount("bloom_threshold", "bloom"),
@@ -2671,12 +3052,17 @@ class MainWindow(QMainWindow):
             chroma_shift_x=self._effect_amount("chroma_shift_x", "chromatic"),
             chroma_shift_y=self._effect_amount("chroma_shift_y", "chromatic"),
             barrel_amount=self._effect_amount("barrel_amount", "barrel"),
+            barrel_falloff=self._effect_amount("barrel_falloff", "barrel"),
             noise_amount=self._effect_amount("noise_amount", "noise"),
+            noise_mode=self._effect_choice("noise_mode", "mode", default="rgb"),
+            noise_grain=self._effect_amount("noise_grain", "noise"),
             h_jitter_amount=self._effect_amount("h_jitter_amount", "h_jitter"),
             h_jitter_speed=self._effect_amount("h_jitter_speed", "h_jitter"),
             v_roll_amount=self._effect_amount("v_roll_amount", "v_roll"),
             v_roll_speed=self._effect_amount("v_roll_speed", "v_roll"),
             bleed_amount=self._effect_amount("bleed_amount", "bleed"),
+            bleed_radius=self._effect_amount("bleed_radius", "bleed"),
+            bleed_direction=self._effect_choice("bleed_direction", "direction", default="horizontal"),
         )
         return settings
 
@@ -2700,6 +3086,8 @@ class MainWindow(QMainWindow):
             return 0.0
         widget = controls.get("amount")
         if isinstance(widget, QDoubleSpinBox):
+            return float(widget.value())
+        if isinstance(widget, QSpinBox):
             return float(widget.value())
         return 0.0
 
@@ -2740,6 +3128,16 @@ class MainWindow(QMainWindow):
         if isinstance(widget, QSpinBox):
             return int(widget.value())
         return 1
+
+    def _effect_choice(self, key: str, field_name: str, *, default: str) -> str:
+        controls = self.effect_controls.get(key)
+        if not controls:
+            return default
+        widget = controls.get(field_name)
+        if isinstance(widget, QComboBox):
+            value = widget.currentData()
+            return str(value) if value is not None else default
+        return default
 
     def _start_render(self) -> None:
         settings = self._collect_settings()

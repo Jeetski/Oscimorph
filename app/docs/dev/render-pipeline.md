@@ -1,103 +1,146 @@
 # Render Pipeline
 
-Core implementation: `src/oscimorph/render/core.py`.
+Core implementation: `src/oscimorph/render/core.py`
 
-Public entry point: `render_video(settings, progress_cb=None, cancel_cb=None)`.
+Public entry point: `render_video(settings, progress_cb=None, cancel_cb=None)`
 
 ## Pipeline Stages
 
-1. Setup:
-- Ensure temp dir and progress log
-- Resolve source mode:
-  - media frames
-  - procedural shape
-  - script-generated polylines
-  - text outlines
+### 1. Setup
 
-2. Audio source:
-- File mode: `load_and_analyze(...)` from `audio.py`
-- Osc mode: synthetic band envelope based on oscillator settings
+- normalize temp directory handling through `ensure_temp_dir(...)`
+- create or rotate the progress log through `init_progress_log(...)`
+- resolve source mode from `RenderSettings.media_mode`
 
-3. Per-frame loop:
-- Pick frame/source geometry
-- Compute modulation signals from selected bands
-- Build edge image
-- Optional overlays:
-  - waveform line
-  - lissajous overlay
-- Apply post effects chain
-- Store RGB frame for output
+### 2. Source preparation
 
-4. Export:
-- Build `ImageSequenceClip`
-- Attach original audio file in file mode
-- Encode with `libx264` (`aac` audio when applicable)
+Depending on mode, the pipeline prepares one of the following:
 
-## Source Inputs
+- media frames loaded from image, GIF, or video
+- procedural geometry rasterized from shape settings
+- text converted to normalized polylines
+- script-generated polylines evaluated frame-by-frame
 
-Media loading supports:
+### 3. Audio preparation
 
-- images: `.gif`, `.png`, `.jpg`, `.jpeg`, `.bmp`, `.webp`
-- videos: `.mp4`, `.mov`, `.mkv`, `.avi`, `.webm`
+- file mode calls `load_and_analyze(...)`
+- oscillator mode synthesizes modulation values from waveform, frequency, depth, and mix settings
+
+### 4. Per-frame render loop
+
+For each output frame, the pipeline:
+
+1. computes `t` from frame index and output FPS
+2. resolves band energies and oscillator value
+3. builds the source frame or polyline geometry
+4. applies modulation-driven transforms
+5. runs edge extraction and optional overlays
+6. applies image-space post effects
+7. stores the frame for final export
+
+### 5. Export
+
+- create `ImageSequenceClip`
+- attach original audio when `audio_mode == "file"`
+- encode through FFmpeg via MoviePy
+
+## Source Modes
+
+### Media
+
+Supported image inputs:
+
+- `.gif`
+- `.png`
+- `.jpg`
+- `.jpeg`
+- `.bmp`
+- `.webp`
+
+Supported video inputs:
+
+- `.mp4`
+- `.mov`
+- `.mkv`
+- `.avi`
+- `.webm`
 
 Unsupported formats raise `RuntimeError("Unsupported media format")`.
 
-## Geometry Modes
+### Shapes
 
-- Shapes: generated white outlines on black background.
-- Script: user function returns normalized polylines.
-- Text: Qt text outline extraction to normalized polylines.
+The renderer can synthesize geometry for:
 
-## Edge and Overlay
+- ring
+- polygon
+- ellipse
+- heart
+- star
+- rectangle
+- spiral
+- lemniscate
+- cardioid
+- clover
+- superellipse
 
-- Edge methods: Sobel or Canny
-- Render modes:
-  - `edge_only`
-  - `edge_overlay`
+### Text
 
-In `edge_overlay`, waveform and lissajous can be drawn over the edge render.
+Text mode uses Qt outline extraction, then normalizes the resulting paths into `[-1, 1]`-style polyline space.
 
-## Modulation
+### Script
 
-`_mod_value(...)` resolves a selector and optional oscillator mix:
+Script mode loads a trusted local Python file and calls `generate(t, audio, settings)` for each frame.
+
+## Modulation Semantics
+
+Helpers in `modulation.py` provide:
+
+- band selector resolution
+- oscillator value synthesis
+- audio/oscillator mixing
+- rotation direction policy
+- hue-shifted output color
+
+Selectors currently supported by the helper path:
 
 - `all`
+- `low`
+- `mid`
+- `high`
 - `band:<index>`
 - `osc`
 
-Rotation has direction policy:
+## Post-Processing
 
-- clockwise
-- counterclockwise
-- alternate
-
-## Post Effects (Final Render)
-
-Available in pipeline:
+The final render path can apply:
 
 - bloom
 - vignette
-- phosphor mask
-- color bleed
+- phosphor mask with selectable RGB, grille, or slot styles and stripe width
 - chromatic aberration
-- barrel distortion
+- barrel distortion with configurable falloff
+- noise with RGB/mono modes and grain control
 - horizontal jitter
 - vertical roll
-- noise
-- dither
-- plus other upstream modulation effects
+- color bleed with radius and direction controls
+- dither with selectable Bayer, ordered, or diffusion modes and configurable palette levels
 
-## Progress Reporting
+The pipeline also includes earlier modulation-style effects such as thickness, glow, threshold, warp, rotation, trail, flicker, scanline, jitter, and audio-reactive dither modulation. Several of those now expose richer controls in both preview and final render, including glow blend/threshold, trail decay/blend, flicker style/speed/floor, scanline thickness/spacing/style, jitter axis/style, and barrel falloff.
 
-`_ProgressTracker` combines:
+## Progress Tracking
 
-- render frame progress
-- moviepy audio chunk progress
-- moviepy frame encode progress
+Progress behavior is now implemented in `src/oscimorph/render/progress.py`.
 
-Writes percentage lines to `debug/oscimorph_run.log`.
+`ProgressTracker` combines three contributors:
+
+- render loop progress
+- MoviePy audio chunk progress
+- MoviePy frame encode progress
+
+`MoviepyLogger` forwards MoviePy bar updates into that tracker.
+
+Progress is appended to `app/debug/oscimorph_run.log` as percentage lines.
 
 ## Cancellation
 
-If `cancel_cb` returns true during render, `RenderCancelled` is raised.
-
+If `cancel_cb` returns `True`, the pipeline raises `RenderCancelled`.

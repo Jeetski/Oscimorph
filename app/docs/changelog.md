@@ -1,5 +1,45 @@
 # Oscimorph Changelog
 
+## 2026-03-21
+
+### Effect control expansion
+
+- Expanded `glow`, `scanline`, `noise`, `trail`, `jitter`, `bleed`, `flicker`, `phosphor`, and `barrel` with deeper controls in both preview and final render.
+- Added flicker styles with speed/floor control.
+- Added phosphor mask styles and stripe width control.
+- Added barrel falloff control.
+- Updated the Windows smoke render so it exercises the richer post-effect stack.
+
+### Dither upgrade
+
+- Expanded the dither effect with multiple modes:
+  - Bayer 8x8
+  - Ordered 4x4
+  - Diffusion
+- Added palette level reduction controls for the dither stage.
+- Added audio-reactive dither amount modulation.
+- Updated preview and final render paths to use the same dither settings.
+
+### Documentation cleanup
+
+- Refreshed developer docs to describe the current code layout more accurately:
+  - `docs/dev/README.md`
+  - `docs/dev/architecture.md`
+  - `docs/dev/gui.md`
+  - `docs/dev/render-pipeline.md`
+  - `docs/dev/presets.md`
+  - `docs/dev/script-api.md`
+  - `docs/dev/known-gaps.md`
+- Updated the user guide to better match the installer/launcher flow and current runtime behavior.
+
+### Startup smoke coverage
+
+- Added a lightweight startup smoke script:
+  - `app/scripts/smoke_startup.py`
+- Added a GitHub Actions workflow for macOS startup verification:
+  - `.github/workflows/macos-smoke.yml`
+- Smoke flow skips the startup splash/audio using `OSCIMORPH_SKIP_STARTUP=1`.
+
 ## 2026-02-14
 
 ### Project refactor and structure
@@ -8,7 +48,7 @@
   - `src/oscimorph/gui/`
   - `src/oscimorph/render/`
 - Moved original files to:
-  - `src/oscimorph/gui/legacy.py`
+  - `src/oscimorph/gui/implementation.py`
   - `src/oscimorph/render/core.py`
 - Added package-level module exports:
   - GUI: `main_window.py`, `preview.py`, `workers.py`, `widgets.py`, `__init__.py`

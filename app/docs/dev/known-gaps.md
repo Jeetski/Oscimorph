@@ -1,61 +1,82 @@
 # Known Gaps and Next Refactors
 
-This file tracks practical technical debt in the current codebase.
+This document tracks the highest-value cleanup targets that can be addressed without redefining the product.
 
-## 1) Package split is mostly structural
+## 1. The package split is still mostly structural
 
-The project now has `gui/` and `render/` packages, but:
+Current state:
 
-- `src/oscimorph/gui/legacy.py` still contains most GUI behavior.
-- `src/oscimorph/render/core.py` still contains most render behavior.
+- `src/oscimorph/gui/implementation.py` remains the real GUI module
+- `src/oscimorph/render/core.py` remains the real render module
+- most neighboring files are export shims or helper extractions
 
-Recommendation:
+Recommended next steps:
 
-- Extract concrete modules incrementally (no behavior changes), starting with:
-  - GUI: startup dialog, preview orchestration, transport controls, preset service
-  - Render: input sources, geometry transforms, overlays, postfx chain, progress IO
+- split GUI by responsibility, not widget type
+- split render by pipeline stage, not just helper category
+- keep imports stable through package re-exports while moving code
 
-## 2) Preview and final render parity
+Good low-risk extraction targets:
 
-Preview is intentionally approximate and not a full parity path:
+- GUI startup splash and changelog window
+- preview orchestration and transport
+- preset service
+- render source loaders
+- polyline transforms
+- overlay drawing
+- post-processing chain assembly
 
-- Media mode preview is limited.
-- Edge extraction/overlay behavior differs from final output.
-- Preview runs with fixed `preview_fps` while final render can use user FPS.
+## 2. Preview and final render still differ in meaningful ways
 
-Recommendation:
+Current state:
 
-- Add optional "high-fidelity preview" path for sampled frames using render pipeline at low resolution.
+- preview is intentionally approximate
+- media mode preview is limited
+- preview timing is driven by `preview_fps`, not output FPS
+- some effects are approximated differently from the final pipeline
 
-## 3) Script execution trust model
+Recommended next step:
 
-Script mode uses `exec()` with limited globals but still trusted local code execution.
+- add an optional sampled low-resolution render-preview path for frame-accurate checks
 
-Recommendation:
+## 3. GUI and render internals are tightly coupled
 
-- Document trust assumptions in UI.
-- Optional future sandbox mode for untrusted scripts.
+Current state:
 
-## 4) Testing coverage
+- GUI imports several underscored helpers from `oscimorph.render`
+- preview math depends on render internals rather than a stable public service layer
 
-No automated tests were found for:
+Recommended next steps:
 
-- Render output invariants
-- Preset compatibility
-- Script API contract
-- UI state transitions
+- introduce an explicit preview/render shared service module
+- stop treating private helper imports as long-term API
 
-Recommendation:
+## 4. Script mode is trusted execution only
 
-- Start with deterministic unit tests on pure helpers in render/audio.
-- Add regression snapshot tests for small render fixtures.
+Current state:
 
-## 5) API boundaries
+- scripts are loaded with `exec(...)`
+- helper globals are limited, but not sandboxed
 
-GUI imports several underscored render helpers (private-by-convention functions), creating tight coupling.
+Recommended next steps:
 
-Recommendation:
+- keep the trust model documented in the UI and docs
+- consider a future restricted mode only if untrusted scripts become a real use case
 
-- Introduce explicit public service modules for preview math and shared transforms.
-- Reduce direct imports from internal render internals.
+## 5. Test coverage is still thin
 
+There is now a startup smoke path for macOS CI, but broader automated coverage is still missing.
+
+High-value missing coverage:
+
+- render output invariants
+- preset round-trip compatibility
+- script API contract checks
+- UI visibility/state transitions
+- regression tests for representative source modes
+
+Recommended next steps:
+
+- add unit tests for pure helpers in `audio.py`, `modulation.py`, `postfx.py`, and `text.py`
+- add tiny render fixtures for deterministic snapshot-style checks
+- expand smoke coverage beyond startup success

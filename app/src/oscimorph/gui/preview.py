@@ -1,3 +1,3 @@
-from .legacy import PreviewCanvas
+from .implementation import PreviewCanvas
 
 __all__ = ["PreviewCanvas"]
