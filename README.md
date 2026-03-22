@@ -37,6 +37,22 @@ Honeycomb Lab: https://www.honeycomblab.art
 1. Double-click `run_oscimorph.bat` to launch (logs: `app/debug/oscimorph_run.log`).
 1. `run_oscimorph.bat` verifies the project virtual environment and `ffmpeg` before launching.
 
+**Windows Release Build**
+1. Run `install_dependencies.bat` once to create `app/.venv/`.
+1. Build the packaged app with:
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\windows\build_windows_release.ps1 -SkipInstaller
+```
+1. Smoke-test the packaged app with:
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\windows\smoke_packaged_app.ps1
+```
+1. If Inno Setup is installed and `iscc.exe` is on PATH, build the installer with:
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\windows\build_windows_release.ps1
+```
+1. Packaged output lands in `dist/Oscimorph/`. Installer output lands in `dist/installer/`.
+
 **Quick Start (macOS/Linux)**
 1. `bash install_dependencies.sh` and review the dependency check report.
 1. Choose whether to install/update missing items.

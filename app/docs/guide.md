@@ -14,18 +14,26 @@ Oscimorph turns visual outlines into audio-reactive videos:
 
 ## Requirements
 
-- Python 3.11+
-- FFmpeg available on PATH (recommended for reliable MP4 export)
+- Windows installer build: no separate Python required
+- Source checkout: Python 3.11+ and `ffmpeg` on PATH
 
 ## Launching the App
 
 ### Windows
 
+Installed build:
+
+1. Run the Windows installer.
+2. Launch Oscimorph from the Start Menu or desktop shortcut.
+3. The app opens full-screen.
+
+Source checkout:
+
 1. Double-click `install_dependencies.bat`.
 2. Review the dependency check summary.
 3. Choose whether to install/update missing items.
 4. Double-click `run_oscimorph.bat`.
-5. The launcher checks Python and required packages before startup.
+5. The launcher checks the project virtual environment and `ffmpeg` before startup.
 6. The app opens full-screen.
 
 ### macOS/Linux
@@ -35,7 +43,7 @@ Oscimorph turns visual outlines into audio-reactive videos:
 3. Choose whether to install/update missing items.
 4. Run `bash run_oscimorph.sh`.
 5. The launcher checks Python and required packages before startup.
-6. The app launches and logs to `app/debug/oscimorph_run.log`.
+6. The app launches and writes runtime data under the user data directory.
 
 ### Manual launch
 
@@ -50,6 +58,9 @@ Startup notes:
 
 - The normal app launch shows the startup splash and plays startup audio when available.
 - For automation or smoke tests, `OSCIMORPH_SKIP_STARTUP=1` skips that launch presentation.
+- Runtime output, logs, temp files, and user presets are written under the user data directory:
+  Windows: `%LOCALAPPDATA%\Oscimorph`
+  Other platforms: `~/.oscimorph`
 
 ## First Render (Fast Path)
 
@@ -57,7 +68,8 @@ Startup notes:
 - Set **Input Mode** to `Shapes`.
 - Set **Audio Source** to `Audio File`.
 - Choose an audio file.
-- Choose output path (default is `app/output/output.mp4`).
+- Choose output path.
+  Default: `%LOCALAPPDATA%\Oscimorph\output\output.mp4` on Windows.
 
 2. In **Shapes**:
 - Pick a shape (`Ring`, `Polygon`, `Star`, etc).
@@ -80,6 +92,8 @@ Startup notes:
 - Supported images/animation: `.gif`, `.png`, `.jpg`, `.jpeg`, `.bmp`, `.webp`
 - Supported videos: `.mp4`, `.mov`, `.mkv`, `.avi`, `.webm`
 - Use when you want edge extraction from existing footage or artwork.
+
+The media picker now filters to those supported formats only.
 
 ### Shapes
 
@@ -113,6 +127,7 @@ Built-in shapes:
 ### Audio File
 
 - Uses analyzed band energies from your selected audio track.
+- Picker filter: `.mp3`, `.wav`, `.flac`, `.ogg`, `.m4a`, `.aac`, `.aif`, `.aiff`
 
 ### Oscillator
 
@@ -164,13 +179,16 @@ You can save/load effect states as JSON:
 
 - Click **Save Preset** to write a `.json`.
 - Click **Load Preset** to restore.
-- Built-in presets are in `app/presets/`.
+- Built-in presets are seeded into your user preset folder on first run.
+- User preset folder:
+  Windows: `%LOCALAPPDATA%\Oscimorph\presets`
+  Other platforms: `~/.oscimorph/presets`
 
 ## Preview vs Final Render
 
 Preview is fast and useful for tuning motion and effect behavior, but it is not fully final-quality.
 
-- Media mode preview is limited (UI notes media cannot be fully previewed).
+- Media mode preview uses a simplified proxy behavior and is not source-faithful.
 - Final render uses the full pipeline and encoder.
 - Always do a short test render before a final export.
 
@@ -183,18 +201,26 @@ Preview is fast and useful for tuning motion and effect behavior, but it is not 
 
 ## Output and Logs
 
-- Default output file: `app/output/output.mp4`
-- Runtime/render log: `app/debug/oscimorph_run.log`
-- Temp workspace: `app/temp/`
-- Built-in presets: `app/presets/`
-- Example scripts: `app/scripts/`
+- Default output file:
+  Windows: `%LOCALAPPDATA%\Oscimorph\output\output.mp4`
+  Other platforms: `~/.oscimorph/output/output.mp4`
+- Runtime/render log:
+  Windows: `%LOCALAPPDATA%\Oscimorph\debug\oscimorph_run.log`
+  Other platforms: `~/.oscimorph/debug/oscimorph_run.log`
+- Temp workspace:
+  Windows: `%LOCALAPPDATA%\Oscimorph\temp`
+  Other platforms: `~/.oscimorph/temp`
+- User presets:
+  Windows: `%LOCALAPPDATA%\Oscimorph\presets`
+  Other platforms: `~/.oscimorph/presets`
+- Example scripts are bundled from `app/scripts/`
 
 ## Troubleshooting
 
 ### App launches but render fails
 
 - Confirm `ffmpeg` works in terminal.
-- Check `app/debug/oscimorph_run.log`.
+- Check `%LOCALAPPDATA%\Oscimorph\debug\oscimorph_run.log` on Windows.
 - Try lower resolution/FPS.
 - Try a short render in Shapes mode first to isolate media/script-specific issues.
 

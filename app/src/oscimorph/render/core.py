@@ -117,6 +117,32 @@ def _load_media_frames(
     raise RuntimeError("Unsupported media format")
 
 
+def _transform_shape_points(
+    points: np.ndarray,
+    *,
+    decimate_step: int,
+    jitter_amount: float,
+    jitter_axis: str,
+    jitter_style: str,
+) -> np.ndarray:
+    pts = np.asarray(points, dtype=np.float32)
+    step = max(1, int(decimate_step))
+    if step > 1:
+        pts = pts[::step]
+    if pts.size == 0:
+        return pts.astype(np.int32)
+    if jitter_amount > 0.0:
+        jitter = (np.random.rand(pts.shape[0], 2) - 0.5) * 2.0 * jitter_amount
+        if jitter_style == "stepped":
+            jitter = np.round(jitter)
+        if jitter_axis == "x":
+            jitter[:, 1] = 0.0
+        elif jitter_axis == "y":
+            jitter[:, 0] = 0.0
+        pts = pts + jitter
+    return pts.astype(np.int32)
+
+
 def _make_shape_frame(
     *,
     width: int,
@@ -139,6 +165,10 @@ def _make_shape_frame(
     clover_scale: float,
     superellipse_n: float,
     superellipse_scale: float,
+    decimate_step: int,
+    jitter_amount: float,
+    jitter_axis: str,
+    jitter_style: str,
 ) -> np.ndarray:
     canvas = np.zeros((height, width, 3), dtype=np.uint8)
     center = (width // 2, height // 2)
@@ -156,20 +186,39 @@ def _make_shape_frame(
                 center[1] + np.sin(angles) * radius,
             ],
             axis=1,
-        ).astype(np.int32)
+        )
+        points = _transform_shape_points(
+            points,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
         cv2.polylines(canvas, [points], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "ellipse":
-        cv2.ellipse(
-            canvas,
-            center,
-            (int(radius * ellipse_x), int(radius * ellipse_y)),
-            shape_rotation,
-            0,
-            360,
-            color,
-            thickness=3,
-            lineType=cv2.LINE_AA,
+        angles = np.linspace(0, 2 * np.pi, 361)
+        pts = np.stack(
+            [
+                np.cos(angles) * radius * ellipse_x,
+                np.sin(angles) * radius * ellipse_y,
+            ],
+            axis=1,
         )
+        rot = np.array(
+            [[np.cos(rotation), -np.sin(rotation)], [np.sin(rotation), np.cos(rotation)]],
+            dtype=np.float32,
+        )
+        pts = pts @ rot.T
+        pts[:, 0] += center[0]
+        pts[:, 1] += center[1]
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "rectangle":
         corners = np.array(
             [
@@ -188,7 +237,14 @@ def _make_shape_frame(
         pts = (corners @ rot.T) * radius
         pts[:, 0] += center[0]
         pts[:, 1] += center[1]
-        cv2.polylines(canvas, [pts.astype(np.int32)], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "star":
         spikes = max(3, int(star_points))
         points = []
@@ -199,7 +255,14 @@ def _make_shape_frame(
         pts = np.array(points, dtype=np.float32) * radius
         pts[:, 0] += center[0]
         pts[:, 1] += center[1]
-        cv2.polylines(canvas, [pts.astype(np.int32)], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "spiral":
         turns = float(spiral_turns)
         steps = 360
@@ -216,7 +279,14 @@ def _make_shape_frame(
         pts = (pts @ rot.T) * radius
         pts[:, 0] += center[0]
         pts[:, 1] += center[1]
-        cv2.polylines(canvas, [pts.astype(np.int32)], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "lemniscate":
         steps = 360
         points = []
@@ -234,7 +304,14 @@ def _make_shape_frame(
         pts = (pts @ rot.T) * radius
         pts[:, 0] += center[0]
         pts[:, 1] += center[1]
-        cv2.polylines(canvas, [pts.astype(np.int32)], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "cardioid":
         steps = 360
         points = []
@@ -250,7 +327,14 @@ def _make_shape_frame(
         pts = (pts @ rot.T) * radius
         pts[:, 0] += center[0]
         pts[:, 1] += center[1]
-        cv2.polylines(canvas, [pts.astype(np.int32)], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "clover":
         steps = 360
         points = []
@@ -267,7 +351,14 @@ def _make_shape_frame(
         pts = (pts @ rot.T) * radius
         pts[:, 0] += center[0]
         pts[:, 1] += center[1]
-        cv2.polylines(canvas, [pts.astype(np.int32)], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "superellipse":
         steps = 360
         n = max(0.5, float(superellipse_n))
@@ -285,7 +376,14 @@ def _make_shape_frame(
         pts = (pts @ rot.T) * radius
         pts[:, 0] += center[0]
         pts[:, 1] += center[1]
-        cv2.polylines(canvas, [pts.astype(np.int32)], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=False, color=color, thickness=3, lineType=cv2.LINE_AA)
     elif shape_type == "heart":
         points = []
         steps = 360
@@ -299,19 +397,31 @@ def _make_shape_frame(
             yr = x * np.sin(rotation) + y * np.cos(rotation)
             points.append([center[0] + xr * radius * 2.0, center[1] - yr * radius * 2.0])
         pts = np.array(points, dtype=np.int32)
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
         cv2.polylines(canvas, [pts], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
     else:
-        cv2.ellipse(
-            canvas,
-            center,
-            (radius, radius),
-            shape_rotation,
-            0,
-            360,
-            color,
-            thickness=3,
-            lineType=cv2.LINE_AA,
+        angles = np.linspace(0, 2 * np.pi, 361)
+        pts = np.stack(
+            [
+                center[0] + np.cos(angles + rotation) * radius,
+                center[1] + np.sin(angles + rotation) * radius,
+            ],
+            axis=1,
         )
+        pts = _transform_shape_points(
+            pts,
+            decimate_step=decimate_step,
+            jitter_amount=jitter_amount,
+            jitter_axis=jitter_axis,
+            jitter_style=jitter_style,
+        )
+        cv2.polylines(canvas, [pts], isClosed=True, color=color, thickness=3, lineType=cv2.LINE_AA)
 
     return canvas
 
@@ -355,6 +465,49 @@ def _color_with_energy(color_rgb: tuple[int, int, int], energy: float) -> tuple[
     return (b, g, r)
 
 
+def _transform_edge_mask(
+    mask: np.ndarray,
+    *,
+    decimate_step: int,
+    jitter_amount: float,
+    jitter_axis: str,
+    jitter_style: str,
+) -> np.ndarray:
+    step = max(1, int(decimate_step))
+    jitter_amount = max(0.0, float(jitter_amount))
+    if step <= 1 and jitter_amount <= 0.0:
+        return mask
+
+    binary = np.clip(mask * 255.0, 0, 255).astype(np.uint8)
+    contours, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return mask
+
+    out = np.zeros_like(binary)
+    for contour in contours:
+        points = contour.reshape(-1, 2).astype(np.float32)
+        if points.shape[0] < 2:
+            continue
+        if step > 1:
+            points = points[::step]
+            if points.shape[0] < 2:
+                continue
+        if jitter_amount > 0.0:
+            jitter = (np.random.rand(points.shape[0], 2) - 0.5) * 2.0 * jitter_amount
+            if jitter_style == "stepped":
+                jitter = np.round(jitter)
+            if jitter_axis == "x":
+                jitter[:, 1] = 0.0
+            elif jitter_axis == "y":
+                jitter[:, 0] = 0.0
+            points = points + jitter
+        pts = points.astype(np.int32)
+        is_closed = np.linalg.norm(points[0] - points[-1]) <= 1.5
+        cv2.polylines(out, [pts], isClosed=is_closed, color=255, thickness=1, lineType=cv2.LINE_AA)
+
+    return out.astype(np.float32) / 255.0
+
+
 def _edge_oscilloscope(
     frame_rgb: np.ndarray,
     color_rgb: tuple[int, int, int],
@@ -366,6 +519,10 @@ def _edge_oscilloscope(
     glow_radius: float,
     glow_threshold: float,
     glow_blend: str,
+    decimate_step: int = 1,
+    jitter_amount: float = 0.0,
+    jitter_axis: str = "xy",
+    jitter_style: str = "random",
 ) -> np.ndarray:
     gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
     if method == "canny":
@@ -381,6 +538,14 @@ def _edge_oscilloscope(
         if max_val > 0:
             mag = mag / max_val
         mag = np.clip((mag - threshold) / max(1e-6, 1 - threshold), 0, 1)
+
+    mag = _transform_edge_mask(
+        mag,
+        decimate_step=decimate_step,
+        jitter_amount=jitter_amount,
+        jitter_axis=jitter_axis,
+        jitter_style=jitter_style,
+    )
 
     if thickness > 1:
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (thickness, thickness))
@@ -623,6 +788,10 @@ def render_video(
                 settings.height,
                 polylines,
                 preserve_aspect=settings.preserve_aspect,
+                decimate_step=max(1, int(settings.decimate_step)),
+                jitter_amount=settings.jitter_amount * sig_jitter,
+                jitter_axis=settings.jitter_axis,
+                jitter_style=settings.jitter_style,
             )
         elif text_polylines is not None:
             text_rotation = 0.0
@@ -636,6 +805,10 @@ def render_video(
                 settings.height,
                 polylines,
                 preserve_aspect=settings.preserve_aspect,
+                decimate_step=max(1, int(settings.decimate_step)),
+                jitter_amount=settings.jitter_amount * sig_jitter,
+                jitter_axis=settings.jitter_axis,
+                jitter_style=settings.jitter_style,
             )
         elif gif_frames is None:
             base_rotation = float(settings.shape_rotation)
@@ -662,6 +835,10 @@ def render_video(
                 clover_scale=settings.clover_scale,
                 superellipse_n=settings.superellipse_n,
                 superellipse_scale=settings.superellipse_scale,
+                decimate_step=max(1, int(settings.decimate_step)),
+                jitter_amount=settings.jitter_amount * sig_jitter,
+                jitter_axis=settings.jitter_axis,
+                jitter_style=settings.jitter_style,
             )
         else:
             base = gif_frames[i % len(gif_frames)].copy()
@@ -674,6 +851,11 @@ def render_video(
         )
         glow_strength = max(0.0, settings.glow_strength + settings.mod_glow_amount * sig_glow)
         thickness = max(1, int(round(1 + settings.mod_thickness_amount * sig_thickness)))
+        edge_decimate_step = 1
+        edge_jitter_amount = 0.0
+        if settings.media_mode == "media":
+            edge_decimate_step = max(1, int(settings.decimate_step))
+            edge_jitter_amount = settings.jitter_amount * sig_jitter
 
         hue_shift = settings.hue_shift_amount * sig_hue
         shifted_color = _apply_hue_shift(settings.color_rgb, hue_shift)
@@ -688,19 +870,35 @@ def render_video(
             glow_radius=settings.glow_radius,
             glow_threshold=settings.glow_threshold,
             glow_blend=settings.glow_blend,
+            decimate_step=edge_decimate_step,
+            jitter_amount=edge_jitter_amount,
+            jitter_axis=settings.jitter_axis,
+            jitter_style=settings.jitter_style,
         )
 
-        if settings.edge_mode == "edge_only":
-            phase = i / float(settings.fps)
-            warp_amount = settings.mod_warp_amount * sig_warp
-            warp_speed = 1.0 + settings.mod_warp_speed_amount * sig_warp_speed
+        if settings.media_mode == "media" and settings.mod_rotation_amount != 0.0:
+            media_rotation = settings.mod_rotation_amount * sig_rotation
+            center = ((width - 1) * 0.5, (height - 1) * 0.5)
+            rot_mat = cv2.getRotationMatrix2D(center, media_rotation, 1.0)
+            edge_rgb = cv2.warpAffine(
+                edge_rgb,
+                rot_mat,
+                (width, height),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT,
+            )
+
+        phase = i / float(settings.fps)
+        warp_amount = settings.mod_warp_amount * sig_warp
+        warp_speed = 1.0 + settings.mod_warp_speed_amount * sig_warp_speed
+        displace_x = settings.mod_displace_x_amount * sig_displace_x
+        displace_y = settings.mod_displace_y_amount * sig_displace_y
+        if warp_amount != 0.0 or displace_x != 0.0 or displace_y != 0.0:
             freq_x = 2 * np.pi / max(1.0, height / 3.0)
             freq_y = 2 * np.pi / max(1.0, width / 3.0)
             warp_x = np.sin(grid_y * freq_x + phase * warp_speed) * warp_amount
             warp_y = np.sin(grid_x * freq_y + phase * (warp_speed * 1.1)) * warp_amount
 
-            displace_x = settings.mod_displace_x_amount * sig_displace_x
-            displace_y = settings.mod_displace_y_amount * sig_displace_y
             jitter_x = np.sin(grid_y * (freq_x * 1.7) + phase * (warp_speed * 1.7)) * displace_x
             jitter_y = np.cos(grid_x * (freq_y * 1.3) + phase * (warp_speed * 1.3)) * displace_y
 

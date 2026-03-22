@@ -112,10 +112,15 @@ def _make_script_frame(
     polylines: list[list[tuple[float, float]]],
     *,
     preserve_aspect: bool,
+    decimate_step: int = 1,
+    jitter_amount: float = 0.0,
+    jitter_axis: str = "xy",
+    jitter_style: str = "random",
 ) -> np.ndarray:
     canvas = np.zeros((height, width, 3), dtype=np.uint8)
     if not polylines:
         return canvas
+    step = max(1, int(decimate_step))
     if preserve_aspect:
         scale = min(width, height) * 0.5
         offset_x = width * 0.5
@@ -123,14 +128,30 @@ def _make_script_frame(
     for line in polylines:
         if not line:
             continue
+        points = line[::step] if step > 1 else line
+        if not points:
+            continue
+        transformed: list[tuple[float, float]] = []
+        for x, y in points:
+            if jitter_amount > 0.0:
+                jx = (np.random.rand() - 0.5) * 2.0 * jitter_amount
+                jy = (np.random.rand() - 0.5) * 2.0 * jitter_amount
+                if jitter_style == "stepped":
+                    jx = round(jx)
+                    jy = round(jy)
+                if jitter_axis in {"xy", "x"}:
+                    x += jx
+                if jitter_axis in {"xy", "y"}:
+                    y += jy
+            transformed.append((x, y))
         if preserve_aspect:
             pts = np.array(
-                [(offset_x + x * scale, offset_y + y * scale) for x, y in line],
+                [(offset_x + x * scale, offset_y + y * scale) for x, y in transformed],
                 dtype=np.int32,
             )
         else:
             pts = np.array(
-                [((x * 0.5 + 0.5) * (width - 1), (y * 0.5 + 0.5) * (height - 1)) for x, y in line],
+                [((x * 0.5 + 0.5) * (width - 1), (y * 0.5 + 0.5) * (height - 1)) for x, y in transformed],
                 dtype=np.int32,
             )
         cv2.polylines(canvas, [pts], isClosed=False, color=(255, 255, 255), thickness=2, lineType=cv2.LINE_AA)

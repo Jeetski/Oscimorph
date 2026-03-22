@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from typing import Callable
 
 import cv2
@@ -40,6 +41,16 @@ from PySide6.QtWidgets import (
 )
 
 from ..audio import AudioAnalysis, band_at_frame, load_and_analyze
+from ..runtime import (
+    append_debug_log,
+    assets_dir,
+    bundled_presets_dir,
+    ensure_user_dirs,
+    output_dir,
+    package_root,
+    scripts_dir,
+    user_presets_dir,
+)
 from ..render import (
     RenderCancelled,
     RenderSettings,
@@ -68,6 +79,15 @@ from ..render import (
 
 
 ACCENT = "#00FBCC"
+MEDIA_FILE_FILTER = (
+    "Supported Media (*.gif *.png *.jpg *.jpeg *.bmp *.webp *.mp4 *.mov *.mkv *.avi *.webm);;"
+    "Image Files (*.gif *.png *.jpg *.jpeg *.bmp *.webp);;"
+    "Video Files (*.mp4 *.mov *.mkv *.avi *.webm)"
+)
+AUDIO_FILE_FILTER = (
+    "Supported Audio (*.mp3 *.wav *.flac *.ogg *.m4a *.aac *.aif *.aiff);;"
+    "Audio Files (*.mp3 *.wav *.flac *.ogg *.m4a *.aac *.aif *.aiff)"
+)
 
 
 class PreviewCanvas(QWidget):
@@ -147,6 +167,9 @@ class PreviewCanvas(QWidget):
         self._polylines = None
         self._last_image = None
         self.update()
+
+    def reset_temporal_state(self) -> None:
+        self._last_image = None
 
     def update_state(
         self,
@@ -555,15 +578,17 @@ class PreviewCanvas(QWidget):
             width = rgb.width()
             height = rgb.height()
             buf = rgb.bits()
-            buf.setsize(rgb.sizeInBytes())
-            frame_rgb = np.frombuffer(buf, dtype=np.uint8).reshape((height, width, 3)).copy()
+            frame_rgb = np.frombuffer(buf, dtype=np.uint8, count=rgb.sizeInBytes()).reshape((height, width, 3)).copy()
             frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
             previous_bgr = None
             if self._trail_strength > 0.0 and self._last_image is not None:
                 prev_rgb = self._last_image.convertToFormat(QImage.Format_RGB888)
                 prev_buf = prev_rgb.bits()
-                prev_buf.setsize(prev_rgb.sizeInBytes())
-                prev_frame = np.frombuffer(prev_buf, dtype=np.uint8).reshape((prev_rgb.height(), prev_rgb.width(), 3)).copy()
+                prev_frame = np.frombuffer(
+                    prev_buf,
+                    dtype=np.uint8,
+                    count=prev_rgb.sizeInBytes(),
+                ).reshape((prev_rgb.height(), prev_rgb.width(), 3)).copy()
                 if prev_rgb.width() != width or prev_rgb.height() != height:
                     prev_frame = cv2.resize(prev_frame, (width, height), interpolation=cv2.INTER_LINEAR)
                 previous_bgr = cv2.cvtColor(prev_frame, cv2.COLOR_RGB2BGR)
@@ -820,7 +845,7 @@ class OscillatorAudioDevice(QIODevice):
 
 class RenderWorker(QThread):
     progress = Signal(int, int)
-    finished = Signal()
+    completed = Signal()
     canceled = Signal()
     failed = Signal(str)
 
@@ -841,7 +866,7 @@ class RenderWorker(QThread):
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(str(exc))
         else:
-            self.finished.emit()
+            self.completed.emit()
 
     def cancel(self) -> None:
         self._cancel = True
@@ -851,8 +876,8 @@ class RenderWorker(QThread):
 
 
 class AudioAnalysisWorker(QThread):
-    finished = Signal(object)
-    failed = Signal(str)
+    analysis_ready = Signal(str, object)
+    failed = Signal(str, str)
 
     def __init__(self, audio_path: str, fps: int, bands: int) -> None:
         super().__init__()
@@ -864,9 +889,9 @@ class AudioAnalysisWorker(QThread):
         try:
             analysis = load_and_analyze(self.audio_path, fps=self.fps, bands=self.bands)
         except Exception as exc:  # noqa: BLE001
-            self.failed.emit(str(exc))
+            self.failed.emit(self.audio_path, str(exc))
             return
-        self.finished.emit(analysis)
+        self.analysis_ready.emit(self.audio_path, analysis)
 
 
 class EffectWidget(QFrame):
@@ -894,7 +919,9 @@ class EffectWidget(QFrame):
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self._app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        self._app_root = str(package_root())
+        ensure_user_dirs()
+        self._seed_bundled_presets()
         self.setWindowTitle("Oscimorph alpha v0.1")
         self._set_branding()
         self._apply_theme()
@@ -911,6 +938,9 @@ class MainWindow(QMainWindow):
         self.media_player.setAudioOutput(self.audio_output)
         self.media_player.positionChanged.connect(self._sync_slider_from_media)
         self.media_player.durationChanged.connect(self._sync_duration_from_media)
+        self.media_player.errorOccurred.connect(self._on_media_error)
+        self.media_player.mediaStatusChanged.connect(self._on_media_status_changed)
+        self.media_player.playbackStateChanged.connect(self._on_media_playback_state_changed)
 
         self.osc_audio_sink: QAudioSink | None = None
         self.osc_audio_device: OscillatorAudioDevice | None = None
@@ -919,6 +949,8 @@ class MainWindow(QMainWindow):
 
         self.audio_analysis: AudioAnalysis | None = None
         self.audio_worker: AudioAnalysisWorker | None = None
+        self._analysis_path: str | None = None
+        self._analysis_loading_path: str | None = None
         self.script_generate: Callable | None = None
 
         self.preview_time = 0.0
@@ -1021,7 +1053,7 @@ class MainWindow(QMainWindow):
         )
 
     def _set_branding(self) -> None:
-        icon_path = os.path.join(self._app_root, "assets", "logo.ico")
+        icon_path = str(assets_dir() / "logo.ico")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
 
@@ -1038,7 +1070,7 @@ class MainWindow(QMainWindow):
         preview_title = QLabel("Preview")
         preview_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold;")
         logo_label = QLabel()
-        logo_path = os.path.join(self._app_root, "assets", "logo.png")
+        logo_path = str(assets_dir() / "logo.png")
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)
             if not pixmap.isNull():
@@ -1165,7 +1197,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
 
         osc_logo = QLabel()
-        logo_path = os.path.join(self._app_root, "assets", "logo.png")
+        logo_path = str(assets_dir() / "logo.png")
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)
             if not pixmap.isNull():
@@ -1179,34 +1211,53 @@ class MainWindow(QMainWindow):
         title.setStyleSheet("font-size: 34px; font-weight: 700;")
         content.addWidget(title)
 
+        tagline = QLabel("Turn audio into visuals in seconds.")
+        tagline.setStyleSheet("font-size: 14px; color: #9FB1B7;")
+        content.addWidget(tagline)
+
         brand_row = QHBoxLayout()
-        brand_row.setSpacing(6)
+        brand_row.setSpacing(10)
         honeycomb_logo = QLabel()
-        honeycomb_logo_path = os.path.join(self._app_root, "assets", "honeycomb_lab.png")
+        honeycomb_logo_path = str(assets_dir() / "honeycomb_lab.png")
         if os.path.exists(honeycomb_logo_path):
             honeycomb_pixmap = QPixmap(honeycomb_logo_path)
             if not honeycomb_pixmap.isNull():
-                honeycomb_logo.setPixmap(honeycomb_pixmap.scaledToHeight(16, Qt.SmoothTransformation))
-        brand_row.addWidget(honeycomb_logo, 0, Qt.AlignVCenter)
+                honeycomb_logo.setPixmap(honeycomb_pixmap.scaledToHeight(20, Qt.SmoothTransformation))
+        brand_row.addWidget(honeycomb_logo, 0, Qt.AlignTop)
 
-        brand_name = QLabel("Honeycomb Lab")
-        brand_name.setStyleSheet("font-size: 12px;")
-        brand_row.addWidget(brand_name, 0, Qt.AlignVCenter)
+        brand_copy = QVBoxLayout()
+        brand_copy.setSpacing(2)
+        brand_name = QLabel("by Honeycomb Lab")
+        brand_name.setStyleSheet("font-size: 12px; color: #9FB1B7;")
+        brand_copy.addWidget(brand_name, 0, Qt.AlignLeft)
 
         brand_link = QLabel('<a href="https://honeycomblab.art">honeycomblab.art</a>')
         brand_link.setOpenExternalLinks(True)
         brand_link.setTextInteractionFlags(Qt.TextBrowserInteraction)
         brand_link.setStyleSheet("font-size: 12px;")
-        brand_row.addWidget(brand_link, 0, Qt.AlignVCenter)
+        brand_copy.addWidget(brand_link, 0, Qt.AlignLeft)
+        brand_row.addLayout(brand_copy, 1)
         brand_row.addStretch(1)
         content.addLayout(brand_row)
+
+        docs_row = QHBoxLayout()
+        docs_row.setSpacing(12)
 
         changelog_link = QLabel('<a href="changelog">View changelog</a>')
         changelog_link.setOpenExternalLinks(False)
         changelog_link.setTextInteractionFlags(Qt.TextBrowserInteraction)
         changelog_link.setStyleSheet("font-size: 12px;")
         changelog_link.linkActivated.connect(self._open_changelog_window)
-        content.addWidget(changelog_link, 0, Qt.AlignLeft)
+        docs_row.addWidget(changelog_link, 0, Qt.AlignLeft)
+
+        guide_link = QLabel('<a href="guide">View guide</a>')
+        guide_link.setOpenExternalLinks(False)
+        guide_link.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        guide_link.setStyleSheet("font-size: 12px;")
+        guide_link.linkActivated.connect(self._open_guide_window)
+        docs_row.addWidget(guide_link, 0, Qt.AlignLeft)
+        docs_row.addStretch(1)
+        content.addLayout(docs_row)
         content.addStretch(1)
 
         content_layout.addLayout(content, 1)
@@ -1217,8 +1268,31 @@ class MainWindow(QMainWindow):
         self._startup_dialog = dialog
 
     def _open_changelog_window(self, _link: str) -> None:
+        self._open_markdown_window(
+            title="Oscimorph alpha v0.1 Changelog",
+            relative_path=("docs", "changelog.md"),
+            missing_message="Changelog file not found: docs/changelog.md",
+            attr_name="_changelog_dialog",
+        )
+
+    def _open_guide_window(self, _link: str) -> None:
+        self._open_markdown_window(
+            title="Oscimorph alpha v0.1 Guide",
+            relative_path=("docs", "guide.md"),
+            missing_message="Guide file not found: docs/guide.md",
+            attr_name="_guide_dialog",
+        )
+
+    def _open_markdown_window(
+        self,
+        *,
+        title: str,
+        relative_path: tuple[str, ...],
+        missing_message: str,
+        attr_name: str,
+    ) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Oscimorph alpha v0.1 Changelog")
+        dialog.setWindowTitle(title)
         dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         dialog.resize(900, 650)
 
@@ -1226,20 +1300,20 @@ class MainWindow(QMainWindow):
         browser = QTextBrowser(dialog)
         browser.setOpenExternalLinks(True)
 
-        changelog_path = os.path.join(self._app_root, "docs", "changelog.md")
-        if os.path.exists(changelog_path):
+        markdown_path = os.path.join(self._app_root, *relative_path)
+        if os.path.exists(markdown_path):
             try:
-                with open(changelog_path, "r", encoding="utf-8") as handle:
+                with open(markdown_path, "r", encoding="utf-8") as handle:
                     content = handle.read()
                 browser.setMarkdown(content)
             except OSError as exc:
-                browser.setPlainText(f"Failed to load changelog:\n{exc}")
+                browser.setPlainText(f"Failed to load document:\n{exc}")
         else:
-            browser.setPlainText("Changelog file not found: docs/changelog.md")
+            browser.setPlainText(missing_message)
 
         layout.addWidget(browser)
         dialog.show()
-        self._changelog_dialog = dialog
+        setattr(self, attr_name, dialog)
 
     def _build_io_frame(self) -> None:
         self.io_frame = QGroupBox("Inputs & Output")
@@ -1272,7 +1346,7 @@ class MainWindow(QMainWindow):
         audio_row.addWidget(self.audio_browse)
         form.addRow("Audio Path", self._wrap_row(audio_row))
 
-        self.output_path = QLineEdit(os.path.join("output", "output.mp4"))
+        self.output_path = QLineEdit(str(output_dir() / "output.mp4"))
         self.output_browse = QPushButton("Browse")
         out_row = QHBoxLayout()
         out_row.addWidget(self.output_path, 1)
@@ -1367,7 +1441,7 @@ class MainWindow(QMainWindow):
         self.side_layout.addWidget(self.io_frame)
 
     def _startup_sound_path(self) -> str | None:
-        assets_dir = os.path.join(self._app_root, "assets")
+        assets_root = str(assets_dir())
         candidates = [
             "startup.mp3",
             "startup.wav",
@@ -1377,15 +1451,15 @@ class MainWindow(QMainWindow):
             "startup.aac",
         ]
         for name in candidates:
-            path = os.path.join(assets_dir, name)
+            path = os.path.join(assets_root, name)
             if os.path.exists(path):
                 return path
         exts = {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"}
         try:
-            for file_name in os.listdir(assets_dir):
+            for file_name in os.listdir(assets_root):
                 ext = os.path.splitext(file_name)[1].lower()
                 if ext in exts:
-                    return os.path.join(assets_dir, file_name)
+                    return os.path.join(assets_root, file_name)
         except OSError:
             return None
         return None
@@ -2319,6 +2393,7 @@ class MainWindow(QMainWindow):
         self.active_effects.add(key)
         if key == "smoothing":
             self.preview_smoothed = None
+        self.preview_canvas.reset_temporal_state()
         self._refresh_effects_dropdown()
 
     def _remove_effect(self, key: str) -> None:
@@ -2328,6 +2403,7 @@ class MainWindow(QMainWindow):
         widget.setVisible(False)
         self.active_effects.discard(key)
         self._reset_effect_values(key)
+        self.preview_canvas.reset_temporal_state()
         self._refresh_effects_dropdown()
         self._update_preview_frame()
 
@@ -2376,7 +2452,22 @@ class MainWindow(QMainWindow):
         self._update_preview_frame()
 
     def _presets_dir(self) -> str:
-        return os.path.join(self._app_root, "presets")
+        return str(user_presets_dir())
+
+    def _seed_bundled_presets(self) -> None:
+        source_dir = bundled_presets_dir()
+        target_dir = user_presets_dir()
+        if not source_dir.exists():
+            return
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for preset_file in source_dir.glob("*.json"):
+            target = target_dir / preset_file.name
+            if target.exists():
+                continue
+            try:
+                shutil.copy2(preset_file, target)
+            except OSError:
+                continue
 
     def _collect_effect_preset(self) -> dict[str, object]:
         controls_payload: dict[str, dict[str, object]] = {}
@@ -2454,6 +2545,8 @@ class MainWindow(QMainWindow):
             self.enable_glow.setChecked(glow_enabled)
             self.enable_glow.blockSignals(False)
 
+        self.preview_smoothed = None
+        self.preview_canvas.reset_temporal_state()
         self._refresh_effects_dropdown()
         self._update_preview_frame()
 
@@ -2532,12 +2625,12 @@ class MainWindow(QMainWindow):
             widget.setVisible(key == shape)
 
     def _browse_media(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Select media", "", "Media Files (*.*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Select media", "", MEDIA_FILE_FILTER)
         if path:
             self.media_path.setText(path)
 
     def _browse_audio(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Select audio", "", "Audio Files (*.*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Select audio", "", AUDIO_FILE_FILTER)
         if path:
             self.audio_path.setText(path)
             self._load_audio_analysis(path)
@@ -2546,15 +2639,14 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Output MP4",
-            self.output_path.text() or os.path.join("output", "output.mp4"),
+            self.output_path.text() or str(output_dir() / "output.mp4"),
             "MP4 Files (*.mp4)",
         )
         if path:
             self.output_path.setText(path)
 
     def _browse_script(self) -> None:
-        root = os.path.join(os.getcwd(), "scripts")
-        path, _ = QFileDialog.getOpenFileName(self, "Select script", root, "Python Files (*.py)")
+        path, _ = QFileDialog.getOpenFileName(self, "Select script", str(scripts_dir()), "Python Files (*.py)")
         if path:
             self.script_path.setText(path)
 
@@ -2594,21 +2686,54 @@ class MainWindow(QMainWindow):
         self._update_preview_frame()
 
     def _load_audio_analysis(self, path: str) -> None:
+        path = path.strip()
+        if not path:
+            return
+        if self.audio_analysis is not None and self._analysis_path == path:
+            return
+        if self.audio_worker and self.audio_worker.isRunning() and self._analysis_loading_path == path:
+            return
         if self.audio_worker and self.audio_worker.isRunning():
-            self.audio_worker.quit()
-            self.audio_worker.wait(100)
+            append_debug_log(
+                f"audio-analysis superseded old={self._analysis_loading_path or '<none>'} new={path}"
+            )
         self.audio_analysis = None
+        self._analysis_path = None
+        self._analysis_loading_path = path
         self.audio_worker = AudioAnalysisWorker(path, self.preview_fps, 5)
-        self.audio_worker.finished.connect(self._on_audio_analysis_ready)
+        self.audio_worker.analysis_ready.connect(self._on_audio_analysis_ready)
         self.audio_worker.failed.connect(self._on_audio_analysis_failed)
+        append_debug_log(f"audio-analysis start path={path}")
         self.audio_worker.start()
 
-    def _on_audio_analysis_ready(self, analysis: AudioAnalysis) -> None:
+    def _on_audio_analysis_ready(self, path: str, analysis: AudioAnalysis) -> None:
+        if path != self.audio_path.text().strip():
+            append_debug_log(f"audio-analysis stale-ready path={path}")
+            return
+        self._analysis_loading_path = None
+        self._analysis_path = path
         self.audio_analysis = analysis
+        append_debug_log(
+            f"audio-analysis ready path={path} duration={analysis.duration:.3f}s frames={analysis.band_energies.shape[0]}"
+        )
         self._update_preview_frame()
 
-    def _on_audio_analysis_failed(self, message: str) -> None:
+    def _on_audio_analysis_failed(self, path: str, message: str) -> None:
+        if path == self._analysis_loading_path:
+            self._analysis_loading_path = None
+        append_debug_log(f"audio-analysis failed path={path} error={message}")
         QMessageBox.warning(self, "Audio Error", message)
+
+    def _on_media_error(self, error) -> None:  # noqa: ANN001
+        append_debug_log(
+            f"media-player error code={getattr(error, 'name', error)} message={self.media_player.errorString()!r}"
+        )
+
+    def _on_media_status_changed(self, status) -> None:  # noqa: ANN001
+        append_debug_log(f"media-player status={getattr(status, 'name', status)}")
+
+    def _on_media_playback_state_changed(self, state) -> None:  # noqa: ANN001
+        append_debug_log(f"media-player playback-state={getattr(state, 'name', state)}")
 
     def _reload_script(self) -> None:
         path = self.script_path.text().strip()
@@ -2636,6 +2761,8 @@ class MainWindow(QMainWindow):
         if self.audio_mode_combo.currentData() == "file":
             audio_path = self.audio_path.text().strip()
             if audio_path:
+                append_debug_log(f"playback start path={audio_path}")
+                self._load_audio_analysis(audio_path)
                 self.media_player.setSource(QUrl.fromLocalFile(audio_path))
                 self.media_player.play()
         self.preview_timer.start()
@@ -3150,6 +3277,16 @@ class MainWindow(QMainWindow):
         if settings.media_mode == "script" and not settings.script_path:
             QMessageBox.warning(self, "Missing script", "Select a script file.")
             return
+        if settings.output_path and os.path.exists(settings.output_path):
+            answer = QMessageBox.question(
+                self,
+                "Overwrite output?",
+                f"Output file already exists:\n{settings.output_path}\n\nDo you want to overwrite it?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                return
 
         self.render_button.setEnabled(False)
         self.cancel_button.setVisible(True)
@@ -3157,7 +3294,7 @@ class MainWindow(QMainWindow):
 
         self.render_worker = RenderWorker(settings)
         self.render_worker.progress.connect(self._render_progress)
-        self.render_worker.finished.connect(self._render_finished)
+        self.render_worker.completed.connect(self._render_finished)
         self.render_worker.canceled.connect(self._render_canceled)
         self.render_worker.failed.connect(self._render_failed)
         self.render_worker.start()
@@ -3177,6 +3314,7 @@ class MainWindow(QMainWindow):
         self.cancel_button.setVisible(False)
         self.progress.setValue(100)
         QMessageBox.information(self, "Render complete", "Render finished successfully.")
+        self.progress.setValue(0)
 
     def _render_canceled(self) -> None:
         self.render_button.setEnabled(True)

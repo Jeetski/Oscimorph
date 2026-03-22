@@ -19,3 +19,8 @@ Desktop.ini
 /temp/
 /app/output/
 /app/temp/
+
+# Packaged builds
+/build/
+/dist/
+/app/vendor/

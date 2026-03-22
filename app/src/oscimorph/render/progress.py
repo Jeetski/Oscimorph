@@ -6,6 +6,7 @@ import time
 from typing import Callable
 
 from proglog import ProgressBarLogger
+from ..runtime import debug_dir, temp_dir, ensure_user_dirs
 
 
 class ProgressTracker:
@@ -85,13 +86,12 @@ class MoviepyLogger(ProgressBarLogger):
 
 
 def init_progress_log(output_path: str) -> str | None:
-    root_dir = os.getcwd()
-    debug_dir = os.path.join(root_dir, "debug")
     try:
-        os.makedirs(debug_dir, exist_ok=True)
+        ensure_user_dirs()
+        log_dir = debug_dir()
     except OSError:
-        debug_dir = root_dir
-    primary = os.path.join(debug_dir, "oscimorph_run.log")
+        log_dir = temp_dir().parent
+    primary = os.path.join(log_dir, "oscimorph_run.log")
     try:
         with open(primary, "w", encoding="utf-8") as log_file:
             log_file.write("Oscimorph render log\n")
@@ -99,7 +99,7 @@ def init_progress_log(output_path: str) -> str | None:
     except OSError:
         pass
 
-    fallback = os.path.join(debug_dir, f"oscimorph_run_{int(time.time())}.log")
+    fallback = os.path.join(log_dir, f"oscimorph_run_{int(time.time())}.log")
     try:
         with open(fallback, "w", encoding="utf-8") as log_file:
             log_file.write("Oscimorph render log\n")
@@ -109,13 +109,13 @@ def init_progress_log(output_path: str) -> str | None:
 
 
 def ensure_temp_dir(output_path: str) -> None:
-    root_dir = os.getcwd()
-    temp_dir = os.path.join(root_dir, "temp")
     try:
-        os.makedirs(temp_dir, exist_ok=True)
+        ensure_user_dirs()
+        temp_path = temp_dir()
     except OSError:
         return
-    os.environ["TMP"] = temp_dir
-    os.environ["TEMP"] = temp_dir
-    os.environ["TMPDIR"] = temp_dir
-    tempfile.tempdir = temp_dir
+    temp_dir_str = str(temp_path)
+    os.environ["TMP"] = temp_dir_str
+    os.environ["TEMP"] = temp_dir_str
+    os.environ["TMPDIR"] = temp_dir_str
+    tempfile.tempdir = temp_dir_str
