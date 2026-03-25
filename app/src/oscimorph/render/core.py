@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Callable, List
 
 import cv2
@@ -9,6 +10,7 @@ from PIL import Image
 from moviepy import AudioFileClip, ImageSequenceClip
 
 from ..audio import AudioAnalysis, band_at_frame, frame_count, load_and_analyze
+from ..runtime import temp_dir
 from .modulation import (
     _apply_hue_shift,
     _mod_value,
@@ -1068,11 +1070,20 @@ def render_video(
             logger=logger,
         )
     else:
+        temp_audio_dir = temp_dir()
+        temp_audiofile = str(temp_audio_dir / f"{Path(settings.output_path).stem}_TEMP_MPY_audio.m4a")
+        try:
+            os.remove(temp_audiofile)
+        except FileNotFoundError:
+            pass
         clip = clip.with_audio(AudioFileClip(settings.audio_path))
         clip.write_videofile(
             settings.output_path,
             codec="libx264",
             audio_codec="aac",
+            temp_audiofile=temp_audiofile,
+            temp_audiofile_path=str(temp_audio_dir),
+            remove_temp=True,
             fps=settings.fps,
             threads=4,
             logger=logger,
